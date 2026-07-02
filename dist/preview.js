@@ -1,2 +1,2 @@
-"use strict";
+"use strict";(()=>{var e=new Uint8Array([0,97,115,109,1,0,0,0]);!async function(){const t=document.createElement("div");t.style.cssText="border:2px solid orange; padding:8px; font-family:monospace;",t.textContent=`[vscode-fsl spike] ${await async function(){try{return await WebAssembly.instantiate(e),"WASM OK — @viz-js/viz can run in this webview"}catch(e){return`WASM BLOCKED — ${e.message}`}}()}`,document.body.prepend(t)}()})();
 //# sourceMappingURL=preview.js.map
