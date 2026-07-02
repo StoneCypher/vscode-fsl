@@ -1,40 +1,72 @@
 /**
- * Renders all four rollup-visualizer HTML pages to PNG using a single
- * Playwright browser shared across the four conversions.
+ * Builds the bundle-composition visualizations for the two esbuild bundles and
+ * screenshots each to a PNG using a single shared Playwright browser.
  *
- * Previously this script spawned one html_to_png.js child process per
- * visualization (parallel, but four browser launches). That paid the
- * full Playwright startup cost four times — ~2–5 seconds each on cold
- * cache. This version launches Chromium once, opens four pages on the
- * same browser instance in parallel, screenshots each, then closes.
+ * The template's rollup pipeline produced its four visualizer HTML files as a
+ * side effect of bundling; esbuild has no such plugin, so this script does both
+ * halves itself:
  *
- * The html_to_png.js CLI is unchanged — it remains the right tool for
- * one-off conversions; this driver is purpose-built for the four-pack
- * that the build needs.
+ *   1. For each supported template, run the `esbuild-visualizer` CLI over the
+ *      extension + preview metafiles (emitted by src/scripts/build.mjs) to
+ *      write build/esbuild/visualizations/bundle_<template>.html.
+ *   2. Launch Chromium once, open each HTML on the shared browser, hide the
+ *      sidebar, and screenshot to bundle_<template>.png alongside the HTML.
+ *
+ * Only the three graphical templates the `esbuild-visualizer` 0.7 CLI exposes
+ * are produced: sunburst, treemap, network. (The rollup pipeline also drew a
+ * flamegraph; esbuild-visualizer's CLI does not offer that template, so the
+ * README image grid was reduced to the three produced here — no broken img.)
  *
  * @example
  *   // Invoked by the `viz_png` npm script:
  *   node src/build_js/render_visualizations.js
- *   // Saves build/rollup/visualizations/bundle_{sunburst,treemap,network,flamegraph}.png
+ *   // Writes build/esbuild/visualizations/bundle_{sunburst,treemap,network}.{html,png}
  */
 
 import { chromium } from 'playwright';
+import { execFileSync } from 'child_process';
+import { createRequire } from 'module';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
+
+const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const VIZ_DIR = join(__dirname, '..', '..', 'build', 'rollup', 'visualizations');
+const PROJECT_ROOT = join(__dirname, '..', '..');
+const ESBUILD_DIR  = join(PROJECT_ROOT, 'build', 'esbuild');
+const VIZ_DIR      = join(ESBUILD_DIR, 'visualizations');
+const METAFILES    = [
+  join(ESBUILD_DIR, 'extension.meta.json'),
+  join(ESBUILD_DIR, 'preview.meta.json'),
+];
+
+const CLI = require.resolve('esbuild-visualizer/dist/bin/cli.js');
+
 const WIDTH = 768;
 const HEIGHT = 480;
-const VISUALIZATIONS = ['sunburst', 'treemap', 'network', 'flamegraph'];
+const VISUALIZATIONS = ['sunburst', 'treemap', 'network'];
+
+/**
+ * Generate one visualization HTML from the esbuild metafiles.
+ *
+ * @param {string} name - The template name (e.g., "sunburst")
+ * @returns {void}
+ */
+function generateOne(name) {
+  const out = join(VIZ_DIR, `bundle_${name}.html`);
+  execFileSync(process.execPath, [
+    CLI,
+    '--template', name,
+    '--filename', out,
+    '--title', `vscode-fsl bundle (${name})`,
+    '--metadata', ...METAFILES,
+  ], { stdio: 'inherit' });
+}
 
 /**
  * Render one visualization on a fresh page from a shared browser.
- *
- * Mirrors the sidebar-hiding tweak from html_to_png.js so the PNG matches
- * the layout produced by single-file conversions of the same HTML.
  *
  * @param {import('playwright').Browser} browser - The shared Chromium instance
  * @param {string} name - The visualization name (e.g., "sunburst")
@@ -60,6 +92,10 @@ async function renderOne(browser, name) {
 }
 
 async function main() {
+  for (const name of VISUALIZATIONS) {
+    generateOne(name);
+  }
+
   const browser = await chromium.launch();
   try {
     await Promise.all(VISUALIZATIONS.map(name => renderOne(browser, name)));

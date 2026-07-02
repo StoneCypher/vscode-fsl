@@ -23,7 +23,7 @@ export const FEATURES = {
   clean:          { stages: [0], mandatory: true, script: 'clean' },
   typescript:     { stages: [1], mandatory: true, script: 'typescript' },
   just_test_save: { stages: [1], mandatory: true, script: 'just_test_save' },
-  rollup:         { stages: [2], mandatory: true, script: 'rollup' },
+  bundle:         { stages: [2], mandatory: true, script: 'bundle' },
   dts:            { stages: [2], mandatory: true, script: 'dts' },
   update_madlibs: { stages: [2], mandatory: true, script: 'update_madlibs' },
 
@@ -32,8 +32,8 @@ export const FEATURES = {
   eslint:    { stages: [1],    optional: true, defaultEnabled: true, script: 'eslint' },
   cloc:      { stages: [1],    optional: true, defaultEnabled: true, script: 'cloc' },
   changelog: { stages: [1],    optional: true, defaultEnabled: true, script: 'changelog' },
-  viz_png:   { stages: [3],    optional: true, defaultEnabled: true, script: 'viz_png', requires: ['rollup'] },
-  terser:    { stages: [3],    optional: true, defaultEnabled: true, script: 'terser',  requires: ['rollup'] },
+  viz_png:   { stages: [3],    optional: true, defaultEnabled: true, script: 'viz_png', requires: ['bundle'] },
+  terser:    { stages: [3],    optional: true, defaultEnabled: true, script: 'terser',  requires: ['bundle'] },
   attw:      { stages: [4],    optional: true, defaultEnabled: true, script: 'attw' },
   site:      { stages: [5],    optional: true, defaultEnabled: true, script: 'site',    requires: ['docs'] },
 };

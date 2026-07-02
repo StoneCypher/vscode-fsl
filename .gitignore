@@ -143,9 +143,19 @@ build/*
 test-results/*
 stats.html
 
+# Generated site output — built fresh by CI (test-main-full) and published
+# to the gh-pages branch by the deploy-pages job; no longer tracked on main.
+docs/
+
 # stryker temp files
 .stryker-tmp
 reports/*
 
 # Developer-local build config (per-machine overrides)
 build.config.local.json
+
+# Superpowers SDD scratch (briefs/reports/plans for this port)
+.superpowers/
+
+# Packaged extension artifacts
+*.vsix

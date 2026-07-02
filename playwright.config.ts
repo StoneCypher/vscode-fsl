@@ -14,7 +14,7 @@ import { defineConfig } from '@playwright/test';
  *   BASE_URL=http://localhost:15512 npx playwright test src/ts/e2e
  */
 export default defineConfig({
-  testDir: './src/ts/e2e',
+  testDir: './src/tests/e2e',
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:15512',
   },

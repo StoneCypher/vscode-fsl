@@ -5,20 +5,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0257de" />
-    <meta name="description" content="A description of the page" />
-    <TODO-MAYBE-REMOVE-meta name="rating" content="General" />
-    <TODO-MAYBE-REMOVE-meta name="referrer" content="no-referrer" />
-    <TODO-MAYBE-REMOVE-meta name="format-detection" content="telephone=no" />
-
-    <TODO-MAYBE-REMOVE-link rel="license" href="copyright.html" />
-    <TODO-MAYBE-REMOVE-link rel="amphtml" href="https://example.com/path/to/amp-version.html" />
-    <TODO-MAYBE-REMOVE-link rel="canonical" href="https://example.com/article/?page=2" />
+    <meta name="description" content="FSL Markdown Preview — live FSL / jssm state machines in VS Code's Markdown preview" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png" />
     <link rel="stylesheet" type="text/css" href="index.css" />
-    <script type="text/javascript" src="index.iife.js"></script>
+
+    <script type="text/javascript" src="preview.js"></script>
+
+    <title>FSL Markdown Preview for VS Code</title>
+
   </head>
 
   <body>
+
+    <!--
+      Static placeholders in the exact shape the markdown-it fence plugin emits.
+      They stay inert until the preview bundle (Task 7) ships its hydrator; for
+      now this page only proves preview.js loads without erroring.
+    -->
+    <div class="fsl-fence" data-width="" data-height=""><pre class="fsl-fence-source"><code>a -&gt; b;</code></pre></div>
+    <div class="fsl-fence" data-width="" data-height=""><pre class="fsl-fence-source"><code>Off 'toggle' &lt;-&gt; On;</code></pre></div>
 
   </body>
 
