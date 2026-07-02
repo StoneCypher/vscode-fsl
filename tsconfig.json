@@ -1,49 +1,34 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
+  // Visit https://aka.ms/tsconfig to read more about this file.
+  //
+  // The extension is bundled by esbuild (src/scripts/build.mjs); this tsc pass
+  // exists to typecheck and to emit .d.ts declarations into build/ts for the
+  // `dts` (copy to dist/) and `attw` stages. It never emits JavaScript.
   "compilerOptions": {
-    // File Layout
-    // "rootDir": "./src",
-    "outDir": "./build/ts/",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
 
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "target": "esnext",
-    "types": ["vitest/globals", "node"],
-    // "lib": ["esnext"],
-    // "types": ["DOM"],
-    // and npm install -D @types/node
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": ["node", "vscode"],
 
-    // Other Outputs
-    "sourceMap": true,
+    // Declarations only — esbuild owns the JS bundling.
+    "emitDeclarationOnly": true,
     "declaration": true,
     "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "allowUnreachableCode": false,
-    "allowUnusedLabels": false,
-    "isolatedDeclarations": true,
-
-    // Style Options
-    "noImplicitReturns": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
-    "strict": true,
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
+    "outDir": "build/ts",
+    "rootDir": "src"
   },
-  "include": ["./src/ts/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "**/*.stoch.ts", "**/*.mutat.ts"]
+  "include": ["src"],
+  "exclude": [
+    "src/tests/**",
+    "src/build_js/**",
+    "src/scripts/**",
+    "**/*.spec.ts",
+    "**/*.stoch.ts",
+    "**/*.mutat.ts"
+  ]
 }
