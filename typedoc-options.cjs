@@ -1,5 +1,5 @@
 module.exports = {
-  name: 'react_ts_with_claude_gh_template',
+  name: 'vscode-fsl',
   readme: './README.md',
   out: 'docs/docs',
   plugin: [ 'typedoc-plugin-coverage' ],

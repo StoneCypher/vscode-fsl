@@ -51,7 +51,14 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git pull *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "PowerShell(git rm *)",
+      "Bash(git *)",
+      "PowerShell(npm install *)",
+      "PowerShell(npm run *)",
+      "PowerShell(node src/build_js/render_visualizations.js)",
+      "PowerShell(npm config *)",
+      "PowerShell(git add *)"
     ]
   }
 }
