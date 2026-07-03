@@ -4,7 +4,7 @@
 
 **Goal:** A VS Code extension that renders ` ```fsl ` / ` ```jssm ` fenced code blocks in the Markdown *preview* as live, interactive FSL state machines (the full `<fsl-instance>` IDE, minus the editor), per Layer 2 of the approved fence-convention spec.
 
-**Architecture:** Two bundles from one repo. The **extension-host bundle** (Node) contributes a markdown-it plugin via `extendMarkdownIt` that replaces FSL fences with an inert, escaped placeholder `<div class="fsl-fence">`. The **preview bundle** (browser, contributed via `markdown.previewScripts`) registers jssm's web components and *hydrates* each placeholder into a live `<fsl-instance>` composition. All rendering machinery (jssm, lit, @viz-js/viz) is bundled into the preview script by esbuild — no CDN, no import maps, works offline.
+**Architecture:** Two bundles from one repo. The **extension-host bundle** (Node) contributes a markdown-it plugin via `extendMarkdownIt` that replaces FSL fences with an escaped placeholder `<div class="fsl-fence">` and, **host-side** (Node, no webview CSP), renders each machine to SVG through jssm's Graphviz pipeline (`fsl_to_svg_string` from `jssm/viz`). Renders are cached in an LRU keyed by `(source, width, height)`; markdown-it fence rendering stays synchronous, so a cache **miss** emits the escaped-source placeholder and enqueues an async render, and each completed render triggers the built-in `markdown.preview.refresh` command so the next render pass inlines the now-cached SVG. (The Task 2 spike proved the Markdown-preview CSP blocks WebAssembly — `@viz-js/viz` cannot instantiate in the webview — so Graphviz runs in the host instead; see `notes/spikes/2026-07-02-wasm-under-preview-csp.md`.) The **preview bundle** (browser, contributed via `markdown.previewScripts`) registers jssm's web components and *hydrates* each placeholder into a live `<fsl-instance>` composition built **around** that pre-rendered SVG: the webview never lays out a graph, it only drives state highlighting on the static SVG as the machine transitions. jssm and lit are bundled into the preview script by esbuild (jssm's widget suite statically imports the viz pipeline, so `@viz-js/viz` rides along, but the webview never instantiates Graphviz for the primary diagram — only viz-dependent widget actions such as Export→SVG would, and those stay inert under the CSP); the Graphviz WASM is exercised only in the host bundle. No CDN, no import maps, works offline.
 
 **Tech Stack:** TypeScript 5 (strict), esbuild, vitest + jsdom, markdown-it 14 (dev; VS Code supplies the runtime instance), `jssm@^5.157.0`, `lit@^3`, `@viz-js/viz@^3`, `@vscode/vsce`.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Interpretation policy (spec §5.2):** ignore all element/format tokens; ALWAYS render the full live IDE **less the `editor`** (viz + actions + info-panel + toolbar + title + footer); HONOR `width=` / `height=`.
+- **Interpretation policy (spec §5.2):** ignore all element/format tokens; ALWAYS render the full live IDE **less the `editor`** (viz + actions + toolbar + title + footer); HONOR `width=` / `height=`. (info-panel is HELD OUT of 0.1.0 by user ruling 2026-07-03 — jssm 5.157.x does not ship `fsl-info-panel`; the slot returns when a jssm release ships it. Deliberate deviation from spec §5.2, detailed in Task 5.)
 - **Errors (spec §4.9/§5.5):** invalid FSL renders a visible error box in place — never a silent blank. The escaped source stays visible.
 - **Graceful degradation:** if preview scripts don't run, the fence must still show readable, HTML-escaped FSL source.
 - **Security:** all fence content is HTML-escaped host-side via `md.utils.escapeHtml`; the hydrator only ever reads `textContent` (never innerHTML of un-escaped content).
@@ -327,29 +327,132 @@ git commit -m "chore(spike): WASM-under-preview-CSP probe + sample doc + recorde
 
 ---
 
-### Task 3: The markdown-it fence plugin (host side, pure)
+### Task 3: Host-side render pipeline + the markdown-it fence plugin (pure)
+
+The webview cannot run Graphviz (Task 2: WASM is CSP-blocked), so the *initial* SVG is rendered **host-side** in Node and inlined into the placeholder. This task builds three pure, vitest-covered modules — a render-cache primitive, the Node render call, and the (still-synchronous, still-pure) fence plugin — none of which import `'vscode'`. The thin `vscode` wiring that connects them (cache + async queue + `markdown.preview.refresh`) is Task 4.
 
 **Files:**
+- Create: `src/svg_cache.ts` (hash + LRU — pure)
+- Create: `src/render_machine.ts` (async host-side FSL→SVG — pure, node-testable)
 - Create: `src/fence_plugin.ts`
-- Test: `src/tests/fence_plugin.spec.ts`
+- Test: `src/tests/svg_cache.spec.ts`, `src/tests/render_machine.spec.ts`, `src/tests/fence_plugin.spec.ts`
 
 **Interfaces:**
-- Consumes: `fsl_fence_lang(info: string): 'fsl' | 'jssm' | null`, `parse_fence_info(info: string): FenceDescriptor`, `FenceDimension { value: number; unit: 'px' | 'percent' }` — all from `jssm`.
-- Produces: `fsl_fence_plugin(md: MarkdownIt): void` and `dimension_to_css(dim: FenceDimension | null): string`. Emitted placeholder shape (Tasks 5–7 rely on it):
-  `<div class="fsl-fence" data-width="300px" data-height=""><pre class="fsl-fence-source"><code>ESCAPED SOURCE</code></pre></div>`
+- Consumes: `fsl_fence_lang(info: string): 'fsl' | 'jssm' | null`, `parse_fence_info(info: string): FenceDescriptor`, `FenceDimension { value: number; unit: 'px' | 'percent' }` from `jssm`; `fsl_to_svg_string(fsl: string, opts?): Promise<string>` from `jssm/viz` (verified `node_modules/jssm/jssm_viz.es6.d.ts:4318` — resolves to SVG XML, rejects on unparseable FSL).
+- Produces:
+  - `fnv1a(text): string`, `svg_cache_key(source, width, height): string`, `class LruCache` — from `svg_cache.ts`.
+  - `render_fsl_svg(source, opts?): Promise<string>` — from `render_machine.ts`.
+  - `fsl_fence_plugin(md, { get_svg }): void`, `dimension_to_css(dim): string`, types `GetSvg` / `FslFencePluginOptions` — from `fence_plugin.ts`.
+- **Injected sync lookup (purity boundary, decision #1):** `get_svg(source: string, desc: FenceDescriptor): string | null` returns cached host-rendered SVG markup, or `null` on a miss. The plugin never awaits and never imports `'vscode'`; the enqueue-on-miss side effect lives entirely inside the injected implementation (Task 4).
+- **Emitted placeholder shape (Tasks 4–7 rely on it) — extend, don't replace.** The `.fsl-fence` div always carries `data-width`/`data-height` and the escaped `.fsl-fence-source` pre/code (graceful degradation + the error path). On a cache **hit** an extra `.fsl-fence-svg` child carries the host SVG **before** the source pre:
+  - miss: `<div class="fsl-fence" data-width="300px" data-height=""><pre class="fsl-fence-source"><code>ESCAPED</code></pre></div>`
+  - hit:  `<div class="fsl-fence" …><div class="fsl-fence-svg"><svg …>…</svg></div><pre class="fsl-fence-source"><code>ESCAPED</code></pre></div>`
+- **Security (Global Constraints):** the source is ALWAYS `md.utils.escapeHtml`-escaped; the `.fsl-fence-svg` markup is inlined raw because its sole provenance is jssm/viz output (the same SVG `<fsl-viz>` would have injected in-webview).
 
 - [ ] **Step 1: write the failing tests**
+
+`src/tests/svg_cache.spec.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { fnv1a, svg_cache_key, LruCache } from '../svg_cache.js';
+
+describe('fnv1a', () => {
+
+  it('is deterministic and 8 lowercase hex chars', () => {
+    expect(fnv1a('a -> b;')).toBe(fnv1a('a -> b;'));
+    expect(fnv1a('a -> b;')).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('distinguishes different inputs', () => {
+    expect(fnv1a('a -> b;')).not.toBe(fnv1a('a -> c;'));
+  });
+
+});
+
+describe('svg_cache_key', () => {
+
+  it('varies with source, width, and height independently', () => {
+    const base = svg_cache_key('a -> b;', '', '');
+    expect(svg_cache_key('a -> c;', '',      '')).not.toBe(base);
+    expect(svg_cache_key('a -> b;', '300px', '')).not.toBe(base);
+    expect(svg_cache_key('a -> b;', '',  '50%')).not.toBe(base);
+  });
+
+  it('is stable for identical (source, width, height)', () => {
+    expect(svg_cache_key('a -> b;', '300px', '50%')).toBe(svg_cache_key('a -> b;', '300px', '50%'));
+  });
+
+});
+
+describe('LruCache', () => {
+
+  it('rejects a non-positive capacity', () => {
+    expect(() => new LruCache(0)).toThrow(RangeError);
+  });
+
+  it('stores and retrieves', () => {
+    const c = new LruCache(2);
+    c.set('a', '1');
+    expect(c.get('a')).toBe('1');
+    expect(c.get('missing')).toBeNull();
+  });
+
+  it('evicts the least-recently-used entry past capacity', () => {
+    const c = new LruCache(2);
+    c.set('a', '1');
+    c.set('b', '2');
+    c.set('c', '3');           // 'a' is LRU → evicted
+    expect(c.has('a')).toBe(false);
+    expect(c.has('b')).toBe(true);
+    expect(c.has('c')).toBe(true);
+  });
+
+  it('get promotes an entry so it survives the next eviction', () => {
+    const c = new LruCache(2);
+    c.set('a', '1');
+    c.set('b', '2');
+    expect(c.get('a')).toBe('1'); // 'a' now most-recent; 'b' is LRU
+    c.set('c', '3');              // evicts 'b', not 'a'
+    expect(c.has('a')).toBe(true);
+    expect(c.has('b')).toBe(false);
+  });
+
+});
+```
+
+`src/tests/render_machine.spec.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { render_fsl_svg } from '../render_machine.js';
+
+describe('render_fsl_svg', () => {
+
+  it('renders valid FSL to an SVG string (Node, no CSP)', async () => {
+    const svg = await render_fsl_svg('a -> b;');
+    expect(svg).toContain('<svg');
+  });
+
+  it('rejects on unparseable FSL so the caller can surface the error', async () => {
+    await expect(render_fsl_svg('this is not -> valid ->;')).rejects.toThrow();
+  });
+
+});
+```
 
 `src/tests/fence_plugin.spec.ts`:
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import MarkdownIt              from 'markdown-it';
+import { describe, it, expect, vi } from 'vitest';
+import MarkdownIt                   from 'markdown-it';
 import { fsl_fence_plugin, dimension_to_css } from '../fence_plugin.js';
+import type { GetSvg } from '../fence_plugin.js';
 
-const make_md = (): MarkdownIt => {
+/** Build a markdown-it with the plugin wired to a fixed get_svg (default: all misses). */
+const make_md = (get_svg: GetSvg = () => null): MarkdownIt => {
   const m = new MarkdownIt();
-  fsl_fence_plugin(m);
+  fsl_fence_plugin(m, { get_svg });
   return m;
 };
 
@@ -365,11 +468,28 @@ describe('dimension_to_css', () => {
 
 describe('fsl_fence_plugin', () => {
 
-  it('renders an fsl fence as a hydration placeholder with escaped source', () => {
+  it('renders a cache MISS as a placeholder with escaped source and no SVG', () => {
     const html = make_md().render('```fsl\na -> b;\n```\n');
     expect(html).toContain('class="fsl-fence"');
     expect(html).toContain('fsl-fence-source');
     expect(html).toContain('a -&gt; b;');
+    expect(html).not.toContain('fsl-fence-svg');
+  });
+
+  it('inlines the SVG BEFORE the source pre on a cache HIT', () => {
+    const html = make_md(() => '<svg data-test="ok"></svg>').render('```fsl\na -> b;\n```\n');
+    expect(html).toContain('class="fsl-fence-svg"');
+    expect(html).toContain('<svg data-test="ok">');
+    expect(html.indexOf('fsl-fence-svg')).toBeLessThan(html.indexOf('fsl-fence-source'));
+  });
+
+  it('passes the raw (unescaped) source and the parsed descriptor to get_svg', () => {
+    const get_svg = vi.fn<GetSvg>(() => null);
+    make_md(get_svg).render('```fsl width=300\na -> b;\n```\n');
+    expect(get_svg).toHaveBeenCalledOnce();
+    const [source, desc] = get_svg.mock.calls[0]!;
+    expect(source).toBe('a -> b;\n');
+    expect(desc.width).toEqual({ value: 300, unit: 'px' });
   });
 
   it('accepts the jssm synonym, case-insensitively', () => {
@@ -409,17 +529,164 @@ describe('fsl_fence_plugin', () => {
 
 - [ ] **Step 2: run to verify failure**
 
-Run: `npx vitest run src/tests/fence_plugin.spec.ts`
-Expected: FAIL — `Cannot find module '../fence_plugin.js'`.
+Run: `npx vitest run src/tests/svg_cache.spec.ts src/tests/render_machine.spec.ts src/tests/fence_plugin.spec.ts`
+Expected: FAIL — `Cannot find module '../svg_cache.js'` (and the two siblings).
 
 - [ ] **Step 3: implement**
+
+`src/svg_cache.ts`:
+
+```typescript
+/**
+ *  Deterministic cache key + a bounded LRU for host-rendered fence SVGs.
+ *  Pure and dependency-free, so it unit-tests in plain node vitest.
+ */
+
+/**
+ *  FNV-1a 32-bit hash of a string as an 8-char lowercase hex string.
+ *  Deterministic and well-distributed enough to key a render cache; NOT
+ *  cryptographic.  `Math.imul` keeps the multiply in 32-bit space.
+ *
+ *  @example
+ *  fnv1a('a -> b;') === fnv1a('a -> b;');  // true (stable)
+ */
+export function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ *  Cache key for one fence render: a hash of `(source, width, height)` so two
+ *  fences with identical source but different dimensions never collide.  (The
+ *  host SVG is itself dimension-independent — width/height are CSS applied
+ *  later on the instance — but keying on them exactly as the spec states is
+ *  the conservative choice.)  A NUL separator keeps the fields unambiguous.
+ *
+ *  @example
+ *  svg_cache_key('a -> b;', '300px', '');  // 'fsl-…'
+ */
+export function svg_cache_key(source: string, width: string, height: string): string {
+  return `fsl-${fnv1a(`${width}\u0000${height}\u0000${source}`)}`;
+}
+
+/**
+ *  Fixed-capacity least-recently-used string cache.  `get` promotes the key to
+ *  most-recent and returns `null` on a miss; `set` inserts/promotes and, once
+ *  `capacity` is exceeded, evicts the single least-recently-used entry
+ *  (Map preserves insertion order, so its first key is the LRU one).
+ *
+ *  @example
+ *  const c = new LruCache(2);
+ *  c.set('a', '1'); c.set('b', '2'); c.get('a'); c.set('c', '3');
+ *  c.has('b');  // false — 'b' was least-recently-used and got evicted
+ *
+ *  @throws RangeError when `capacity` is not a positive integer.
+ */
+export class LruCache {
+
+  readonly #capacity: number;
+  readonly #map = new Map<string, string>();
+
+  constructor(capacity: number) {
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      throw new RangeError(`LruCache capacity must be a positive integer, got ${capacity}`);
+    }
+    this.#capacity = capacity;
+  }
+
+  /** True when `key` is present (without promoting it). */
+  has(key: string): boolean { return this.#map.has(key); }
+
+  /** Value for `key`, promoted to most-recent, or `null` on a miss. */
+  get(key: string): string | null {
+    const value = this.#map.get(key);
+    if (value === undefined) { return null; }
+    this.#map.delete(key);
+    this.#map.set(key, value);
+    return value;
+  }
+
+  /** Insert or update `key`, promoting it and evicting the LRU entry if full. */
+  set(key: string, value: string): void {
+    this.#map.delete(key);
+    this.#map.set(key, value);
+    while (this.#map.size > this.#capacity) {
+      const oldest = this.#map.keys().next().value as string;
+      this.#map.delete(oldest);
+    }
+  }
+
+  /** Number of entries currently held. */
+  get size(): number { return this.#map.size; }
+
+}
+```
+
+`src/render_machine.ts`:
+
+```typescript
+import { fsl_to_svg_string } from 'jssm/viz';
+
+/** Optional Graphviz render flags — only the engine override is surfaced here. */
+export interface RenderOpts {
+  /** Graphviz layout engine (e.g. `'dot'`, `'neato'`, `'circo'`). */
+  engine?: string;
+}
+
+/**
+ *  Render FSL source to an SVG string **host-side** (Node, no browser CSP).
+ *  Delegates to jssm's headless viz pipeline (`fsl_to_svg_string`, which runs
+ *  Graphviz WASM — proven to work in Node by the Task 2 spike).  Rejects when
+ *  the source fails to parse or lay out, so the caller caches nothing and the
+ *  hydrator surfaces the parse error instead of a broken diagram.
+ *
+ *  The output is the raw pipeline SVG.  (`<fsl-viz>` additionally reorders the
+ *  paint stack via a private, un-exported helper for edge-label layering; we
+ *  do not depend on that internal, and our highlighting targets state *nodes*,
+ *  which the reorder does not affect — see Task 5.)
+ *
+ *  @param source FSL machine source (the fence body).
+ *  @param opts   Optional engine override.
+ *  @returns A promise resolving to SVG XML.
+ *  @throws When `source` is not valid FSL, or Graphviz fails to lay it out.
+ *
+ *  @example
+ *  const svg = await render_fsl_svg('a -> b;');
+ *  svg.includes('<svg');  // true
+ */
+export async function render_fsl_svg(source: string, opts?: RenderOpts): Promise<string> {
+  return fsl_to_svg_string(source, opts);
+}
+```
+
+Implementation note (verify in Task 8): `render_machine.ts` pulls `@viz-js/viz` into the **extension-host** bundle. esbuild bundles this for `platform: 'node'`; if the WASM asset does not inline cleanly into the Node CJS bundle, mark `@viz-js/viz` external in the host build and ship it in the VSIX — but do NOT touch Task 1's build script speculatively; confirm the bundle first (Task 8, Step 1).
 
 `src/fence_plugin.ts`:
 
 ```typescript
 import type MarkdownIt from 'markdown-it';
 import { fsl_fence_lang, parse_fence_info } from 'jssm';
-import type { FenceDimension } from 'jssm';
+import type { FenceDescriptor, FenceDimension } from 'jssm';
+
+/**
+ *  Synchronous cached-SVG lookup injected into {@link fsl_fence_plugin}.
+ *  Returns ready host-rendered SVG markup for a fence, or `null` on a miss.
+ *  An implementation MAY, as a side effect of returning `null`, enqueue an
+ *  async host render and later trigger a preview refresh (see extension.ts) —
+ *  but this function itself is synchronous and side-effect-free from the
+ *  plugin's point of view.
+ */
+export type GetSvg = (source: string, desc: FenceDescriptor) => string | null;
+
+/** Options bag for {@link fsl_fence_plugin}. */
+export interface FslFencePluginOptions {
+  /** Synchronous cached-SVG lookup; see {@link GetSvg}. */
+  get_svg: GetSvg;
+}
 
 /**
  *  Serialize a parsed fence dimension to a CSS length, or `''` when unset.
@@ -434,27 +701,34 @@ export function dimension_to_css(dim: FenceDimension | null): string {
 }
 
 /**
- *  markdown-it plugin: replaces ```fsl / ```jssm fences with an inert
- *  hydration placeholder — a `.fsl-fence` div carrying width/height data
+ *  markdown-it plugin: replaces ```fsl / ```jssm fences with a hydration
+ *  placeholder.  The `.fsl-fence` div always carries width/height data
  *  attributes and the HTML-escaped FSL source in a `.fsl-fence-source`
- *  pre/code (which is also the graceful-degradation view when preview
- *  scripts don't run).  All other fences fall through to the previous
- *  fence renderer untouched.
+ *  pre/code (the graceful-degradation view, and the error path).  On a cache
+ *  HIT — `get_svg` returns markup — the host-rendered SVG is additionally
+ *  inlined in a `.fsl-fence-svg` child BEFORE the source pre; on a MISS the
+ *  placeholder ships source-only and the injected `get_svg` enqueues the
+ *  render.  All other fences fall through to the previous fence renderer.
  *
- *  Per spec §5.2 the element/format tokens are deliberately ignored here;
- *  only width/height survive into the placeholder.
+ *  Stays pure and synchronous: no `'vscode'` import, no `await`.  Per spec
+ *  §5.2 element/format tokens are ignored; only width/height survive.
+ *
+ *  Security: `token.content` is always `escapeHtml`-escaped; the `get_svg`
+ *  markup is inlined raw because its only source is jssm/viz output (the very
+ *  SVG `<fsl-viz>` would have injected in-webview).
  *
  *  @example
  *  const md = new MarkdownIt();
- *  fsl_fence_plugin(md);
+ *  fsl_fence_plugin(md, { get_svg: (src, desc) => cache.lookup(src, desc) });
  *  md.render('```fsl width=300\na -> b;\n```\n');
  *  // '<div class="fsl-fence" data-width="300px" data-height="">…'
  */
-export function fsl_fence_plugin(md: MarkdownIt): void {
+export function fsl_fence_plugin(md: MarkdownIt, options: FslFencePluginOptions): void {
 
+  const { get_svg } = options;
   const prior = md.renderer.rules.fence;
 
-  md.renderer.rules.fence = function (tokens, idx, options, env, self): string {
+  md.renderer.rules.fence = function (tokens, idx, opts, env, self): string {
 
     const token = tokens[idx];
     if (token === undefined) { return ''; }
@@ -462,15 +736,19 @@ export function fsl_fence_plugin(md: MarkdownIt): void {
     const info = token.info ?? '';
     if (fsl_fence_lang(info) === null) {
       return prior !== undefined
-        ? prior.call(this, tokens, idx, options, env, self)
-        : self.renderToken(tokens, idx, options);
+        ? prior.call(this, tokens, idx, opts, env, self)
+        : self.renderToken(tokens, idx, opts);
     }
 
     const desc = parse_fence_info(info);
     const esc  = md.utils.escapeHtml;
 
+    const svg       = get_svg(token.content, desc);   // trusted jssm/viz markup, or null
+    const svg_block = svg === null ? '' : `<div class="fsl-fence-svg">${svg}</div>`;
+
     return `<div class="fsl-fence" data-width="${esc(dimension_to_css(desc.width))}"`
          + ` data-height="${esc(dimension_to_css(desc.height))}">`
+         + svg_block
          + `<pre class="fsl-fence-source"><code>${esc(token.content)}</code></pre>`
          + `</div>\n`;
   };
@@ -480,29 +758,84 @@ export function fsl_fence_plugin(md: MarkdownIt): void {
 
 - [ ] **Step 4: run to verify pass**
 
-Run: `npx vitest run src/tests/fence_plugin.spec.ts`
-Expected: PASS (9 tests).
+Run: `npx vitest run src/tests/svg_cache.spec.ts src/tests/render_machine.spec.ts src/tests/fence_plugin.spec.ts`
+Expected: PASS (svg_cache 8, render_machine 2, fence_plugin 10 = 20 tests).
 
 - [ ] **Step 5: commit**
 
 ```bash
-git add src/fence_plugin.ts src/tests/fence_plugin.spec.ts
-git commit -m "feat: markdown-it fence plugin — fsl/jssm fences become hydration placeholders"
+git add src/svg_cache.ts src/render_machine.ts src/fence_plugin.ts src/tests/svg_cache.spec.ts src/tests/render_machine.spec.ts src/tests/fence_plugin.spec.ts
+git commit -m "feat: host-side SVG render pipeline (cache + render) and fence plugin with injected SVG lookup"
 ```
 
 ---
 
-### Task 4: Extension entry — wire the plugin into `extendMarkdownIt`
+### Task 4: Extension entry — render queue + `extendMarkdownIt` wiring
+
+The async render bridge lives here (decision #1). To keep it testable, the **queue** (cache + dedupe + enqueue + "ready" callback) is a pure, injectable module (`render_queue.ts`, node-tested); the **only** `vscode`-touching code is the thin debounced `markdown.preview.refresh` trigger in `extension.ts`, and `'vscode'` is imported *lazily* inside that trigger so the module still loads under vitest. The queue+debounce+refresh loop is exercised end-to-end only in Task 8 (the webview isn't reachable from vitest); the queue's cache/dedupe/error semantics are covered by unit tests.
 
 **Files:**
+- Create: `src/render_queue.ts` (pure, injectable)
 - Modify: `src/extension.ts`
-- Test: `src/tests/extension.spec.ts`
+- Test: `src/tests/render_queue.spec.ts`, `src/tests/extension.spec.ts`
 
 **Interfaces:**
-- Consumes: `fsl_fence_plugin` (Task 3).
-- Produces: `activate(): { extendMarkdownIt(md: MarkdownIt): MarkdownIt }` — the shape VS Code's built-in Markdown extension expects. Deliberately imports nothing from `'vscode'` so it stays unit-testable in plain vitest.
+- Consumes: `LruCache` / `svg_cache_key` (Task 3), `dimension_to_css` (Task 3), `render_fsl_svg` (Task 3), `fsl_fence_plugin` (Task 3).
+- Produces:
+  - `create_render_queue(deps): RenderQueue` where `RenderQueue.get_svg` has the {@link GetSvg} shape — from `render_queue.ts`.
+  - `activate(): { extendMarkdownIt(md: MarkdownIt): MarkdownIt }` — the shape VS Code's built-in Markdown extension expects.
 
-- [ ] **Step 1: write the failing test**
+- [ ] **Step 1: write the failing tests**
+
+`src/tests/render_queue.spec.ts`:
+
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { create_render_queue } from '../render_queue.js';
+import type { FenceDescriptor } from 'jssm';
+
+/** Minimal descriptor with no dimensions. */
+const desc = (): FenceDescriptor =>
+  ({ parts: [], ide: true, format: 'svg', width: null, height: null, interactive: true, notes: [] }) as unknown as FenceDescriptor;
+
+/** Let queued microtasks settle. */
+const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+describe('create_render_queue', () => {
+
+  it('returns null on first miss, renders once, then serves the cached SVG', async () => {
+    const render   = vi.fn(async () => '<svg data-ok="1"></svg>');
+    const on_ready = vi.fn();
+    const q = create_render_queue({ render, on_ready });
+
+    expect(q.get_svg('a -> b;', desc())).toBeNull(); // miss → enqueue
+    await flush();
+    expect(render).toHaveBeenCalledOnce();
+    expect(on_ready).toHaveBeenCalledOnce();
+    expect(q.get_svg('a -> b;', desc())).toBe('<svg data-ok="1"></svg>'); // hit
+  });
+
+  it('deduplicates concurrent misses for the same key (renders once)', async () => {
+    const render = vi.fn(async () => '<svg/>');
+    const q = create_render_queue({ render, on_ready: () => {} });
+    q.get_svg('a -> b;', desc());
+    q.get_svg('a -> b;', desc());
+    await flush();
+    expect(render).toHaveBeenCalledOnce();
+  });
+
+  it('swallows a render rejection: stays null, never fires on_ready, does not throw', async () => {
+    const render   = vi.fn(async () => { throw new Error('bad fsl'); });
+    const on_ready = vi.fn();
+    const q = create_render_queue({ render, on_ready });
+    expect(q.get_svg('bad', desc())).toBeNull();
+    await flush();
+    expect(on_ready).not.toHaveBeenCalled();
+    expect(q.get_svg('bad', desc())).toBeNull();
+  });
+
+});
+```
 
 `src/tests/extension.spec.ts`:
 
@@ -514,8 +847,8 @@ import { activate }            from '../extension.js';
 describe('activate', () => {
 
   it('returns an extendMarkdownIt that installs the fsl fence rule', () => {
-    const api = activate();
-    const md  = api.extendMarkdownIt(new MarkdownIt());
+    const md = activate().extendMarkdownIt(new MarkdownIt());
+    // Cache is empty on first render, so the fence is the source-only placeholder.
     expect(md.render('```fsl\na -> b;\n```\n')).toContain('class="fsl-fence"');
   });
 
@@ -529,34 +862,128 @@ describe('activate', () => {
 
 - [ ] **Step 2: run to verify failure**
 
-Run: `npx vitest run src/tests/extension.spec.ts`
-Expected: FAIL — the stub's `extendMarkdownIt` doesn't install the rule, so the first assertion fails.
+Run: `npx vitest run src/tests/render_queue.spec.ts src/tests/extension.spec.ts`
+Expected: FAIL — `Cannot find module '../render_queue.js'`; the stub's `extendMarkdownIt` doesn't install the rule.
 
-- [ ] **Step 3: implement**
+- [ ] **Step 3: implement the queue**
+
+`src/render_queue.ts`:
+
+```typescript
+import { LruCache, svg_cache_key } from './svg_cache.js';
+import { dimension_to_css }        from './fence_plugin.js';
+import type { GetSvg }             from './fence_plugin.js';
+import type { FenceDescriptor }    from 'jssm';
+
+/** Dependencies injected into {@link create_render_queue} (all testable fakes). */
+export interface RenderQueueDeps {
+  /** Host-side async render (FSL source → SVG). A rejection means the source is
+   *  unrenderable; the queue caches nothing and never retries that key (the
+   *  hydrator surfaces the parse error instead). */
+  render: (source: string) => Promise<string>;
+  /** Invoked once per completed render, after the SVG lands in the cache, so
+   *  the host can trigger a debounced preview refresh. */
+  on_ready: () => void;
+  /** LRU capacity. Defaults to 256 fences. */
+  capacity?: number;
+}
+
+/** The queue surface consumed by {@link fsl_fence_plugin}. */
+export interface RenderQueue {
+  /** Synchronous cached-SVG lookup: returns cached SVG, or `null` after
+   *  idempotently enqueuing a host render on a miss. */
+  get_svg: GetSvg;
+}
+
+/**
+ *  Build the render queue that backs `fsl_fence_plugin`'s `get_svg`.  A cache
+ *  hit returns the SVG synchronously; a miss returns `null` and (once per key)
+ *  enqueues `deps.render`, caching the result and calling `deps.on_ready` so
+ *  the caller can refresh the preview.  Purely in-memory and vscode-free, so
+ *  its cache/dedupe/error behavior is unit-tested with fake deps.
+ *
+ *  @example
+ *  const q = create_render_queue({
+ *    render:   render_fsl_svg,
+ *    on_ready: () => void vscode.commands.executeCommand('markdown.preview.refresh'),
+ *  });
+ *  fsl_fence_plugin(md, { get_svg: q.get_svg });
+ */
+export function create_render_queue(deps: RenderQueueDeps): RenderQueue {
+
+  const cache     = new LruCache(deps.capacity ?? 256);
+  const attempted = new Set<string>();
+
+  const get_svg: GetSvg = (source: string, desc: FenceDescriptor): string | null => {
+    const key = svg_cache_key(source, dimension_to_css(desc.width), dimension_to_css(desc.height));
+    const hit = cache.get(key);
+    if (hit !== null) { return hit; }
+    if (!attempted.has(key)) {
+      attempted.add(key);
+      void deps.render(source).then(
+        (svg) => { cache.set(key, svg); deps.on_ready(); },
+        ()    => { /* unrenderable: leave uncached; the hydrator shows the parse error */ },
+      );
+    }
+    return null;
+  };
+
+  return { get_svg };
+}
+```
+
+- [ ] **Step 4: implement the entry**
 
 `src/extension.ts` (replaces the stub):
 
 ```typescript
-import type MarkdownIt      from 'markdown-it';
-import { fsl_fence_plugin } from './fence_plugin.js';
+import type MarkdownIt        from 'markdown-it';
+import { fsl_fence_plugin }   from './fence_plugin.js';
+import { render_fsl_svg }     from './render_machine.js';
+import { create_render_queue } from './render_queue.js';
+
+/** Debounce window before a completed host render triggers a preview refresh. */
+const REFRESH_DEBOUNCE_MS = 120;
 
 /**
- *  VS Code activation hook.  Returns the markdown-it extension point; the
- *  built-in Markdown extension calls `extendMarkdownIt` once when building
- *  the preview renderer, and the plugin installed there rewrites fsl/jssm
- *  fences into hydration placeholders (see fence_plugin.ts).
- *
- *  Imports nothing from 'vscode' by design — everything here is pure and
- *  unit-testable.
+ *  Build the "renders are ready" callback: a debounced trigger of the built-in
+ *  `markdown.preview.refresh` command.  `'vscode'` is imported LAZILY (inside
+ *  the timer) so this module still loads under vitest, where the host `vscode`
+ *  module is absent — the import only resolves in the real extension host.
+ *  Manually verified in Task 8 (the refresh loop isn't reachable from vitest).
+ */
+function make_refresh_trigger(): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return () => {
+    if (timer !== undefined) { clearTimeout(timer); }
+    timer = setTimeout(() => {
+      void import('vscode')
+        .then((v) => v.commands.executeCommand('markdown.preview.refresh'))
+        .catch(() => { /* not in the extension host (e.g. tests) — nothing to refresh */ });
+    }, REFRESH_DEBOUNCE_MS);
+  };
+}
+
+/**
+ *  VS Code activation hook.  Builds the host-side render queue and returns the
+ *  markdown-it extension point; the built-in Markdown extension calls
+ *  `extendMarkdownIt` once when building the preview renderer, and the plugin
+ *  installed there rewrites fsl/jssm fences into hydration placeholders,
+ *  inlining a cached host-rendered SVG as soon as one is available (see
+ *  fence_plugin.ts / render_queue.ts).
  *
  *  @example
  *  const md = activate().extendMarkdownIt(new MarkdownIt());
  *  md.render('```fsl\na -> b;\n```\n');  // contains class="fsl-fence"
  */
 export function activate(): { extendMarkdownIt(md: MarkdownIt): MarkdownIt } {
+  const queue = create_render_queue({
+    render:   render_fsl_svg,
+    on_ready: make_refresh_trigger(),
+  });
   return {
     extendMarkdownIt(md: MarkdownIt): MarkdownIt {
-      fsl_fence_plugin(md);
+      fsl_fence_plugin(md, { get_svg: queue.get_svg });
       return md;
     },
   };
@@ -566,50 +993,109 @@ export function activate(): { extendMarkdownIt(md: MarkdownIt): MarkdownIt } {
 export function deactivate(): void { /* nothing to release */ }
 ```
 
-- [ ] **Step 4: run to verify pass**
+- [ ] **Step 5: run to verify pass**
 
-Run: `npx vitest run src/tests/extension.spec.ts`
-Expected: PASS (2 tests).
+Run: `npx vitest run src/tests/render_queue.spec.ts src/tests/extension.spec.ts`
+Expected: PASS (render_queue 3, extension 2 = 5 tests).
 
-- [ ] **Step 5: commit**
+- [ ] **Step 6: commit**
 
 ```bash
-git add src/extension.ts src/tests/extension.spec.ts
-git commit -m "feat: activate() wires the fence plugin into extendMarkdownIt"
+git add src/render_queue.ts src/extension.ts src/tests/render_queue.spec.ts src/tests/extension.spec.ts
+git commit -m "feat: render queue + activate() wires host-side SVG cache and debounced preview refresh"
 ```
 
 ---
 
-### Task 5: The hydrator (webview side, pure DOM)
+### Task 5: The hydrator (webview side, pure DOM) + highlight driver
 
-**Files:**
-- Create: `src/preview/hydrate.ts`
-- Test: `src/tests/hydrate.spec.ts`
+Because `<fsl-viz>` cannot render under the preview CSP (Task 2) **and** exposes no way to adopt an external SVG (its `_svg` is a private Lit `@state()` with no setter/attribute/method, and both of its render paths call the WASM viz pipeline — verified `node_modules/jssm/dist/wc/viz.js:149-353, 509-517`), the fallback does **not** use `<fsl-viz>`. Instead the hydrator places the host-rendered SVG directly in the instance's `viz` slot and drives highlighting itself, subscribing to the instance's machine.
 
-**Interfaces:**
-- Consumes: the placeholder shape from Task 3 (`.fsl-fence` div, `data-width`/`data-height`, `.fsl-fence-source` text).
-- Produces: `hydrate_fence(fence: HTMLElement): void` and `hydrate_all(root: ParentNode): void`. The mounted composition (Task 7 relies on the `fsl-instance` tag; Task 6 hooks the validation seam):
+The mounted composition (Task 7 relies on the `fsl-instance` tag; Task 6 hooks the validation seam):
 
 ```html
-<fsl-instance theme="system" style="width:…; height:…">
+<fsl-instance theme="light" style="width:…; height:…">
   <span slot="title">FSL machine</span>
-  <fsl-viz slot="viz"></fsl-viz>
+  <div slot="viz" class="fsl-static-viz"><svg …>HOST-RENDERED</svg></div>
   <fsl-toolbar slot="toolbar" no-validate no-lint></fsl-toolbar>
   <fsl-actions slot="actions"></fsl-actions>
-  <fsl-info-panel slot="info-panel"></fsl-info-panel>
   <fsl-footer slot="footer"></fsl-footer>
   <script type="text/fsl">SOURCE</script>
 </fsl-instance>
 ```
 
-Design notes locked in:
-- Source is delivered via the `<script type="text/fsl">` child — jssm's documented channel for FSL containing `<` or `&` (see jssm `src/doc_md/WebComponents.md`).
+Design notes locked in (grounded in jssm 5.157.x source):
+- **Pending vs ready.** The hydrator only mounts when the placeholder already carries a `.fsl-fence-svg` (host render landed). A fence without it is left as the escaped-source placeholder — the pre-render state, *no* "rendering…" chrome (decision, user-decided) — and is **not** marked hydrated, so the next `markdown.preview.refresh` pass (which re-inlines the now-cached SVG) hydrates it.
+- **Viz slot carries the host SVG, not `<fsl-viz>`.** The already-parsed, trusted `<svg>` node is *moved* out of `.fsl-fence-svg` into a `.fsl-static-viz` div in the `viz` slot. No `innerHTML` of un-escaped content is ever read (Global Constraints) — the SVG node was parsed by the browser from host-produced, jssm/viz-provenance markup.
+- **Highlighting** is driven by `src/preview/highlight.ts` (a pure re-implementation of `<fsl-viz>`'s node-matching, since that method only styles SVG inside fsl-viz's own shadow root — `node_modules/jssm/dist/wc/viz.js:412-472`): match the `.node` whose Graphviz `<title>` equals the state name, stroke its shapes, recolor its label.
+- **Machine subscription** (verified `node_modules/jssm/dist/wc/instance.js`): `<fsl-instance>` builds its own `Machine` from the `<script type="text/fsl">` channel (`resolve_fsl_source`, 1038-1091); exposes a public `get machine()` (1318, throws if read before connection); the machine's current state is `machine.state()` (109); `machine.on('transition', cb)` returns an unsubscribe fn (206/230/235); the host re-fires `fsl-machine-rebuilt` on a live rebuild (1752). The wiring runs behind `customElements.whenDefined('fsl-instance')`, so it is inert in jsdom (no defines imported in unit tests) and is manually verified in Task 8; the pure `highlight.ts` functions are unit-tested directly.
+- Source travels via the `<script type="text/fsl">` child — jssm's documented channel for FSL containing `<` or `&` (`resolve_fsl_source`, instance.js:1044-1051).
 - **No `fsl-editor` child, ever** (spec §5.2 — VS Code *is* the editor).
-- Toolbar gets `no-validate no-lint`: those toolbar buttons fire intents nothing in a preview fulfills (see jssm `fsl_toolbar_wc.ts`), so they'd be dead buttons.
-- Hydration is idempotent via a `data-fsl-hydrated` marker — the preview re-fires renders and the hydrator must not double-mount.
-- In jsdom, custom elements don't upgrade (no defines are imported in tests) — tests assert **structure**, which is exactly what this module produces.
+- Toolbar gets `no-validate no-lint`: those buttons fire intents nothing in a preview fulfills.
+- **Deliberate deviation from spec §5.2 (user ruling): no `info-panel` slot in 0.1.0.** jssm 5.157.6 does not register `fsl-info-panel` (no define module names it — verified: only `widgets.define` / `editor.define` / `docs.define` / `instance.define` / `viz.define` run `define_canonical`/`define_with_synonym`, and none names it; it appears only in tutorial content), so rather than ship an inert unknown element the slot is removed entirely for 0.1.0; it returns when a jssm release ships the component (tracked upstream in the jssm repo).
+- Idempotence via a `data-fsl-hydrated` marker; in jsdom, custom elements don't upgrade — tests assert **structure**.
 
 - [ ] **Step 1: write the failing tests**
+
+`src/tests/highlight.spec.ts`:
+
+```typescript
+// @vitest-environment jsdom
+import { describe, it, expect } from 'vitest';
+import { highlight_state, clear_highlights } from '../preview/highlight.js';
+
+/** A two-node graphviz-shaped SVG (nodes titled 'a' and 'b'). */
+function make_svg(): SVGElement {
+  const holder = document.createElement('div');
+  holder.innerHTML =
+    '<svg><g class="graph">' +
+    '<g class="node"><title>a</title><ellipse/></g>' +
+    '<g class="node"><title>b</title><ellipse/></g>' +
+    '</g></svg>';
+  return holder.querySelector('svg')!;
+}
+
+describe('highlight_state', () => {
+
+  it('strokes the matching state node and leaves others unstyled', () => {
+    const svg = make_svg();
+    highlight_state(svg, 'a', { color: '#2e7d32' });
+    const [a, b] = [...svg.querySelectorAll('.node')];
+    expect((a!.querySelector('ellipse') as SVGElement).style.stroke).toBe('#2e7d32');
+    expect((b!.querySelector('ellipse') as SVGElement).style.stroke).toBe('');
+  });
+
+  it('moves the highlight when the state changes', () => {
+    const svg = make_svg();
+    highlight_state(svg, 'a');
+    highlight_state(svg, 'b');
+    const [a, b] = [...svg.querySelectorAll('.node')];
+    expect((a!.querySelector('ellipse') as SVGElement).style.stroke).toBe('');
+    expect((b!.querySelector('ellipse') as SVGElement).style.stroke).not.toBe('');
+  });
+
+  it('is a no-op for an unknown state', () => {
+    const svg = make_svg();
+    highlight_state(svg, 'nope');
+    for (const e of svg.querySelectorAll('ellipse')) {
+      expect((e as SVGElement).style.stroke).toBe('');
+    }
+  });
+
+});
+
+describe('clear_highlights', () => {
+
+  it('removes every inline override it installed', () => {
+    const svg = make_svg();
+    highlight_state(svg, 'a');
+    clear_highlights(svg);
+    const a = svg.querySelector('.node ellipse') as SVGElement;
+    expect(a.style.stroke).toBe('');
+  });
+
+});
+```
 
 `src/tests/hydrate.spec.ts`:
 
@@ -618,12 +1104,19 @@ Design notes locked in:
 import { describe, it, expect } from 'vitest';
 import { hydrate_fence, hydrate_all } from '../preview/hydrate.js';
 
-/** Build a placeholder div exactly as fence_plugin emits it. */
-function make_fence(source: string, width = '', height = ''): HTMLElement {
+/** Build a placeholder div as fence_plugin emits it. Pass `svg` for a cache-hit
+ *  fence (mounts) or `null` for a still-pending one (source-only). */
+function make_fence(source: string, svg: string | null = '<svg><g class="node"><title>a</title><ellipse/></g></svg>', width = '', height = ''): HTMLElement {
   const div = document.createElement('div');
   div.className = 'fsl-fence';
   div.setAttribute('data-width',  width);
   div.setAttribute('data-height', height);
+  if (svg !== null) {
+    const holder = document.createElement('div');
+    holder.className = 'fsl-fence-svg';
+    holder.innerHTML = svg;
+    div.appendChild(holder);
+  }
   const pre  = document.createElement('pre');
   pre.className = 'fsl-fence-source';
   const code = document.createElement('code');
@@ -645,15 +1138,29 @@ describe('hydrate_fence', () => {
     expect(script?.textContent).toBe('a -> b;');
   });
 
-  it('mounts viz, toolbar, actions, info-panel, and footer into their slots', () => {
+  it('puts the host SVG in a .fsl-static-viz viz slot and mounts NO fsl-viz', () => {
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    const viz = fence.querySelector('div.fsl-static-viz[slot="viz"]');
+    expect(viz).not.toBeNull();
+    expect(viz!.querySelector('svg')).not.toBeNull();
+    expect(fence.querySelector('fsl-viz')).toBeNull();
+  });
+
+  it('mounts toolbar, actions, and footer into their slots', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
     for (const [tag, slot] of [
-      ['fsl-viz', 'viz'], ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'],
-      ['fsl-info-panel', 'info-panel'], ['fsl-footer', 'footer'],
+      ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'], ['fsl-footer', 'footer'],
     ]) {
       expect(fence.querySelector(`${tag}[slot="${slot}"]`), `${tag} missing`).not.toBeNull();
     }
+  });
+
+  it('mounts no info-panel (deliberate §5.2 deviation — jssm 5.157.x does not ship fsl-info-panel)', () => {
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    expect(fence.querySelector('fsl-info-panel')).toBeNull();
   });
 
   it('never mounts an editor (spec §5.2 — VS Code is the editor)', () => {
@@ -671,7 +1178,7 @@ describe('hydrate_fence', () => {
   });
 
   it('applies width and height to the instance style', () => {
-    const fence = make_fence('a -> b;', '300px', '50%');
+    const fence = make_fence('a -> b;', undefined, '300px', '50%');
     hydrate_fence(fence);
     const instance = fence.querySelector('fsl-instance') as HTMLElement;
     expect(instance.style.width).toBe('300px');
@@ -685,11 +1192,19 @@ describe('hydrate_fence', () => {
     expect(fence.querySelectorAll('fsl-instance').length).toBe(1);
   });
 
+  it('leaves a still-pending fence (no .fsl-fence-svg) unhydrated', () => {
+    const fence = make_fence('a -> b;', null);
+    hydrate_fence(fence);
+    expect(fence.querySelector('fsl-instance')).toBeNull();
+    expect(fence.hasAttribute('data-fsl-hydrated')).toBe(false);
+    expect(fence.querySelector('.fsl-fence-source')).not.toBeNull();
+  });
+
 });
 
 describe('hydrate_all', () => {
 
-  it('hydrates every .fsl-fence under the root', () => {
+  it('hydrates every ready .fsl-fence under the root', () => {
     document.body.innerHTML = '';
     make_fence('a -> b;');
     make_fence('c -> d;');
@@ -702,47 +1217,152 @@ describe('hydrate_all', () => {
 
 - [ ] **Step 2: run to verify failure**
 
-Run: `npx vitest run src/tests/hydrate.spec.ts`
-Expected: FAIL — `Cannot find module '../preview/hydrate.js'`.
+Run: `npx vitest run src/tests/highlight.spec.ts src/tests/hydrate.spec.ts`
+Expected: FAIL — `Cannot find module '../preview/highlight.js'` / `'../preview/hydrate.js'`.
 
-- [ ] **Step 3: implement**
+- [ ] **Step 3: implement the highlight driver**
+
+`src/preview/highlight.ts`:
+
+```typescript
+/**
+ *  Programmatic highlighting of a host-rendered Graphviz SVG — the fallback's
+ *  substitute for `<fsl-viz>`'s internal `highlightTrace`, which only styles
+ *  SVG living in fsl-viz's own shadow root and would re-run Graphviz WASM
+ *  (blocked under the preview CSP).  Matches Graphviz's own `<title>`
+ *  convention so behavior tracks the live component
+ *  (`node_modules/jssm/dist/wc/viz.js:412-472`).
+ */
+
+/** Undo the `&#45;` / `&gt;` escaping Graphviz emits inside `<title>`. */
+function unescape_title(title: string): string {
+  return title.replace(/&#45;/g, '-').replace(/&gt;/g, '>').replace(/"/g, '');
+}
+
+/**
+ *  Remove every inline fill/stroke/opacity override this module installs,
+ *  restoring the SVG's own Graphviz presentation.  Safe on an un-highlighted
+ *  SVG, before the first highlight, or on an empty container.
+ *
+ *  @example
+ *  clear_highlights(document.querySelector('.fsl-static-viz')!);
+ */
+export function clear_highlights(root: Element): void {
+  for (const el of root.querySelectorAll<SVGElement>('.node, .edge, .node *, .edge *')) {
+    el.style.removeProperty('fill');
+    el.style.removeProperty('stroke');
+    el.style.removeProperty('opacity');
+  }
+}
+
+/**
+ *  Emphasize the current-state node by name: clears prior highlights, then
+ *  strokes the `.node` whose Graphviz `<title>` equals `state` and recolors
+ *  its label.  No-op for an unknown state or an empty SVG.  A single-state
+ *  emphasis (not a trace) — a live preview only needs to show *where* the
+ *  machine is now.
+ *
+ *  @param root    The rendered `<svg>` (or a container holding it).
+ *  @param state   The machine's current state name (`machine.state()`).
+ *  @param options `color` overrides the stroke/label color (default crimson).
+ *
+ *  @example
+ *  highlight_state(vizDiv, 'Green', { color: '#2e7d32' });
+ */
+export function highlight_state(root: Element, state: string, options: { color?: string } = {}): void {
+  clear_highlights(root);
+  const color = options.color ?? '#b71c1c';
+  for (const node of root.querySelectorAll<SVGGElement>('.node')) {
+    const title_el = node.querySelector('title');
+    const title    = title_el ? unescape_title(title_el.textContent ?? '') : '';
+    if (title !== state) { continue; }
+    for (const shape of node.querySelectorAll<SVGElement>('polygon, ellipse, path')) {
+      shape.style.stroke      = color;
+      shape.style.strokeWidth = '2px';
+    }
+    for (const text of node.querySelectorAll<SVGElement>('text')) {
+      text.style.fill = color;
+    }
+  }
+}
+```
+
+- [ ] **Step 4: implement the hydrator**
 
 `src/preview/hydrate.ts`:
 
 ```typescript
+import { highlight_state } from './highlight.js';
+
 /** Marker attribute preventing double-hydration across preview re-renders. */
 const HYDRATED = 'data-fsl-hydrated';
 
-/** The slotted panels of the always-full-IDE composition (spec §5.2) — no editor. */
+/** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor;
+ *  no `<fsl-viz>` (the host-rendered SVG fills the `viz` slot instead); and no
+ *  `fsl-info-panel` for 0.1.0 (deliberate §5.2 deviation: jssm 5.157.x does not
+ *  register the component — the slot returns when a jssm release ships it). */
 const PANELS: ReadonlyArray<readonly [tag: string, slot: string]> = [
-  ['fsl-viz',        'viz'],
-  ['fsl-toolbar',    'toolbar'],
-  ['fsl-actions',    'actions'],
-  ['fsl-info-panel', 'info-panel'],
-  ['fsl-footer',     'footer'],
+  ['fsl-toolbar', 'toolbar'],
+  ['fsl-actions', 'actions'],
+  ['fsl-footer',  'footer'],
 ];
 
+/** Minimal structural view of `<fsl-instance>` the highlight wiring relies on
+ *  after the element upgrades (see instance.js `get machine()` / `machine.on`). */
+interface FslInstanceElement extends HTMLElement {
+  machine: { state(): unknown; on(event: 'transition', cb: () => void): () => void };
+}
+
 /**
- *  Replace one `.fsl-fence` placeholder with a live `<fsl-instance>`
- *  composition (viz + toolbar + actions + info-panel + footer; never an
- *  editor).  The FSL source travels in a `<script type="text/fsl">` child —
- *  jssm's safe channel for source containing `<` or `&`.  Idempotent: a
- *  fence already carrying `data-fsl-hydrated` is left untouched.
+ *  Subscribe the static viz SVG to the instance's machine so the current state
+ *  stays highlighted across transitions.  Deferred behind
+ *  `customElements.whenDefined('fsl-instance')` so it is inert in jsdom (the
+ *  component is never defined in unit tests) and only runs in the real webview.
+ *  Subscriptions live for the preview's lifetime (fences are long-lived); a
+ *  live rebuild swaps the machine, so we re-subscribe on `fsl-machine-rebuilt`.
+ */
+function wire_highlighting(instance: FslInstanceElement, viz: Element): void {
+  void customElements.whenDefined('fsl-instance').then(() => {
+    const paint = (): void => {
+      try { highlight_state(viz, String(instance.machine.state())); }
+      catch { /* machine not built yet / detached — nothing to paint */ }
+    };
+    const subscribe = (): void => {
+      try { instance.machine.on('transition', paint); } catch { /* not ready */ }
+    };
+    subscribe();
+    paint();
+    instance.addEventListener('fsl-machine-rebuilt', () => { subscribe(); paint(); });
+  });
+}
+
+/**
+ *  Replace one *ready* `.fsl-fence` placeholder (one that already carries a
+ *  host-rendered `.fsl-fence-svg`) with a live `<fsl-instance>` composition:
+ *  the host SVG in the `viz` slot, plus toolbar + actions + footer
+ *  (never an editor).  The FSL source travels in a `<script type="text/fsl">`
+ *  child — jssm's safe channel for source containing `<` or `&`.  A fence with
+ *  no `.fsl-fence-svg` yet is left as its escaped-source placeholder (the host
+ *  render is still in flight; the next preview refresh hydrates it) and is NOT
+ *  marked hydrated.  Idempotent for ready fences via `data-fsl-hydrated`.
  *
  *  @example
  *  hydrate_fence(document.querySelector('.fsl-fence')!);
- *  // the div now contains <fsl-instance>…</fsl-instance>
+ *  // a ready fence now contains <fsl-instance>…</fsl-instance>
  */
 export function hydrate_fence(fence: HTMLElement): void {
 
   if (fence.hasAttribute(HYDRATED)) { return; }
-  fence.setAttribute(HYDRATED, 'true');
 
   const doc    = fence.ownerDocument;
   const source = fence.querySelector('.fsl-fence-source')?.textContent ?? '';
 
-  const instance = doc.createElement('fsl-instance');
-  instance.setAttribute('theme', 'system');
+  const svg_holder = fence.querySelector('.fsl-fence-svg');
+  if (svg_holder === null) { return; }   // pending: host render not ready yet
+  fence.setAttribute(HYDRATED, 'true');
+
+  const instance = doc.createElement('fsl-instance') as FslInstanceElement;
+  instance.setAttribute('theme', 'light');
 
   const width  = fence.getAttribute('data-width')  ?? '';
   const height = fence.getAttribute('data-height') ?? '';
@@ -753,6 +1373,13 @@ export function hydrate_fence(fence: HTMLElement): void {
   title.setAttribute('slot', 'title');
   title.textContent = 'FSL machine';
   instance.appendChild(title);
+
+  const viz = doc.createElement('div');
+  viz.setAttribute('slot', 'viz');
+  viz.className = 'fsl-static-viz';
+  const svg_el = svg_holder.querySelector('svg');
+  if (svg_el !== null) { viz.appendChild(svg_el); }   // move the trusted, parsed SVG node
+  instance.appendChild(viz);
 
   for (const [tag, slot] of PANELS) {
     const el = doc.createElement(tag);
@@ -771,11 +1398,14 @@ export function hydrate_fence(fence: HTMLElement): void {
 
   fence.replaceChildren(instance);
 
+  wire_highlighting(instance, viz);
+
 }
 
 /**
- *  Hydrate every `.fsl-fence` placeholder under `root`.  Safe to call
- *  repeatedly (per-fence idempotence guard).
+ *  Hydrate every ready `.fsl-fence` placeholder under `root`.  Safe to call
+ *  repeatedly (per-fence idempotence guard); pending fences are skipped and
+ *  picked up on a later call after their SVG lands.
  *
  *  @example
  *  hydrate_all(document);
@@ -787,16 +1417,16 @@ export function hydrate_all(root: ParentNode): void {
 }
 ```
 
-- [ ] **Step 4: run to verify pass**
+- [ ] **Step 5: run to verify pass**
 
-Run: `npx vitest run src/tests/hydrate.spec.ts`
-Expected: PASS (7 tests).
+Run: `npx vitest run src/tests/highlight.spec.ts src/tests/hydrate.spec.ts`
+Expected: PASS (highlight 4, hydrate 10 = 14 tests).
 
-- [ ] **Step 5: commit**
+- [ ] **Step 6: commit**
 
 ```bash
-git add src/preview/hydrate.ts src/tests/hydrate.spec.ts
-git commit -m "feat: hydrator — .fsl-fence placeholders become live fsl-instance compositions"
+git add src/preview/highlight.ts src/preview/hydrate.ts src/tests/highlight.spec.ts src/tests/hydrate.spec.ts
+git commit -m "feat: hydrator mounts fsl-instance around the host-rendered SVG and drives state highlighting"
 ```
 
 ---
@@ -808,10 +1438,12 @@ git commit -m "feat: hydrator — .fsl-fence placeholders become live fsl-instan
 - Test: `src/tests/hydrate_errors.spec.ts`
 
 **Interfaces:**
-- Consumes: `sm` tagged-template from `jssm` (constructing a machine is the validation — it throws `JssmError` with a message on bad source).
+- Consumes: `sm` tagged-template from `jssm` (constructing a machine is the validation — it throws with a message on bad source).
 - Produces: on invalid source, `hydrate_fence` renders `<div class="fsl-error-box"><strong>FSL error</strong><pre>MESSAGE</pre></div>` **before** the still-visible escaped source, and mounts no instance (spec §4.9/§5.5).
 
-Design note: validation constructs the machine once in the hydrator (cheap relative to a preview render) so a broken machine never reaches `<fsl-instance>`; the live instance then re-parses its own copy, which is fine.
+**Error-seam decision (decision #6): the seam stays hydrator-side (option B).** With host-side rendering, invalid FSL *also* fails the host render — but `render_machine` simply rejects and `render_queue` caches nothing (Tasks 3/4), so an invalid fence never gains a `.fsl-fence-svg`. The hydrator remains the single user-facing error surface: it validates via `sm` *before* the pending/ready gate, so an invalid fence shows the error box immediately (even while a valid neighbor is still rendering, and even if the host never produces anything). This keeps the Global Constraint "visible error box, never blank, source stays visible" intact and unchanged from the original plan; only the *placement within* `hydrate_fence` moves (it now sits ahead of the `.fsl-fence-svg` gate added in Task 5, and owns setting `HYDRATED` on the error path).
+
+Design note: validation constructs the machine once in the hydrator (cheap relative to a render); a valid-but-still-pending fence validates clean and simply waits for its SVG.
 
 - [ ] **Step 1: write the failing tests**
 
@@ -822,11 +1454,18 @@ Design note: validation constructs the machine once in the hydrator (cheap relat
 import { describe, it, expect } from 'vitest';
 import { hydrate_fence } from '../preview/hydrate.js';
 
-function make_fence(source: string): HTMLElement {
+/** Placeholder as fence_plugin emits it. `svg` present ⇒ a ready (valid) fence. */
+function make_fence(source: string, svg: string | null = null): HTMLElement {
   const div = document.createElement('div');
   div.className = 'fsl-fence';
   div.setAttribute('data-width', '');
   div.setAttribute('data-height', '');
+  if (svg !== null) {
+    const holder = document.createElement('div');
+    holder.className = 'fsl-fence-svg';
+    holder.innerHTML = svg;
+    div.appendChild(holder);
+  }
   const pre  = document.createElement('pre');
   pre.className = 'fsl-fence-source';
   const code = document.createElement('code');
@@ -839,7 +1478,7 @@ function make_fence(source: string): HTMLElement {
 
 describe('hydrate_fence with invalid FSL', () => {
 
-  it('renders a visible error box and mounts no instance', () => {
+  it('renders a visible error box and mounts no instance (even with no host SVG)', () => {
     const fence = make_fence('this is not -> valid ->;');
     hydrate_fence(fence);
     const box = fence.querySelector('.fsl-error-box');
@@ -854,8 +1493,15 @@ describe('hydrate_fence with invalid FSL', () => {
     expect(fence.querySelector('.fsl-fence-source')).not.toBeNull();
   });
 
-  it('still mounts normally for valid FSL (regression)', () => {
-    const fence = make_fence('a -> b;');
+  it('marks the invalid fence hydrated so it is not retried', () => {
+    const fence = make_fence('this is not -> valid ->;');
+    hydrate_fence(fence);
+    hydrate_fence(fence);
+    expect(fence.querySelectorAll('.fsl-error-box').length).toBe(1);
+  });
+
+  it('still mounts normally for valid, rendered FSL (regression)', () => {
+    const fence = make_fence('a -> b;', '<svg><g class="node"><title>a</title><ellipse/></g></svg>');
     hydrate_fence(fence);
     expect(fence.querySelector('fsl-instance')).not.toBeNull();
     expect(fence.querySelector('.fsl-error-box')).toBeNull();
@@ -867,7 +1513,7 @@ describe('hydrate_fence with invalid FSL', () => {
 - [ ] **Step 2: run to verify failure**
 
 Run: `npx vitest run src/tests/hydrate_errors.spec.ts`
-Expected: FAIL — no error box is rendered (invalid source currently mounts an instance).
+Expected: FAIL — no error box is rendered (invalid source currently just no-ops as "pending").
 
 - [ ] **Step 3: implement**
 
@@ -915,17 +1561,18 @@ function render_error_box(fence: HTMLElement, message: string): void {
 }
 ```
 
-Then, inside `hydrate_fence`, immediately after the `source` is read (before creating the instance), insert:
+Then, inside `hydrate_fence`, immediately after the `source` is read and **before** the `svg_holder` pending gate, insert:
 
 ```typescript
   const error = validate_fsl(source);
   if (error !== null) {
+    fence.setAttribute(HYDRATED, 'true');   // don't re-run on every preview update
     render_error_box(fence, error);
     return;
   }
 ```
 
-(The `HYDRATED` marker is already set by then, so a broken fence isn't retried on every preview update.)
+(This sits ahead of the `.fsl-fence-svg` gate from Task 5, so an invalid fence surfaces its error even though it has no host SVG; the marker keeps a broken fence from re-validating on every refresh.)
 
 - [ ] **Step 4: run to verify pass**
 
@@ -949,12 +1596,14 @@ git commit -m "feat: visible error box for invalid FSL; source stays readable"
 - Test: `src/tests/theme.spec.ts`
 
 **Interfaces:**
-- Consumes: `hydrate_all` (Task 5); jssm side-effect defines `jssm/wc/instance/define` and `jssm/wc/widgets/define` (register `<fsl-instance>`, `<fsl-viz>`, `<fsl-toolbar>`, `<fsl-actions>`, `<fsl-info-panel>`, `<fsl-footer>`, and the rest of the panel ring).
+- Consumes: `hydrate_all` (Task 5); jssm side-effect defines `jssm/wc/instance/define` (registers `<fsl-instance>` — verified `instance.define.js:62`) and `jssm/wc/widgets/define` (registers `<fsl-toolbar>`, `<fsl-actions>`, `<fsl-footer>`, and the rest of the light widget ring — verified `widgets.define.js:57-66`).
 - Produces: `theme_for_body_classes(classList: DOMTokenList): 'light' | 'dark'` (pure, tested); the assembled preview entry (verified manually in Task 8 — webview behavior isn't reachable from vitest).
 
 Design notes locked in:
-- VS Code marks the preview body with `vscode-light` / `vscode-dark` / `vscode-high-contrast` / `vscode-high-contrast-light` classes. `<fsl-instance theme="…">` accepts `'system' | 'light' | 'dark'` (jssm `fsl_themes.ts` `ThemeMode`); the entry maps body classes to a concrete variant instead of `system`, because the webview's `prefers-color-scheme` tracks the OS, not the VS Code theme.
-- The built-in Markdown preview dispatches `vscode.markdown.updateContent` on `window` when it re-renders the body — re-run `hydrate_all` and re-apply theme there (the `data-fsl-hydrated` guard makes this cheap).
+- **No `<fsl-viz>` / `jssm/wc/viz/define` import** (fallback): the primary diagram is the host SVG (Task 5), not a live viz component. `widgets.js` still *statically* imports the viz pipeline for its Export/Stochastic actions, so `@viz-js/viz` remains in the preview bundle, but the webview never instantiates Graphviz for the primary render; any viz-dependent widget action (e.g. Export→SVG) stays inert under the CSP — acceptable for 0.1.0.
+- **Theming of the host SVG is theme-fixed at render time.** The host renders each SVG once (Node), theme-agnostic and cache-keyed by `(source, width, height)` only — Graphviz bakes its own palette (dark strokes/text on a light ground) into the markup, and the webview never re-renders it. Chosen stance for 0.1.0: **accept the fixed light-palette SVG** and give `.fsl-static-viz` a solid white background so the diagram stays legible under a dark VS Code theme, while `<fsl-instance theme="…">` themes the surrounding IDE chrome (toolbar/panels via `--fsl-color-*`). A theme-reactive SVG (re-render per theme, or a CSS-filter/`currentColor` override) is deliberately deferred (would require re-keying the cache on theme and a host round-trip on every theme switch).
+- VS Code marks the preview body with `vscode-light` / `vscode-dark` / `vscode-high-contrast` / `vscode-high-contrast-light` classes. `<fsl-instance theme="…">` accepts `'system' | 'light' | 'dark'`; the entry maps body classes to a concrete variant instead of `system`, because the webview's `prefers-color-scheme` tracks the OS, not the VS Code theme.
+- The built-in Markdown preview dispatches `vscode.markdown.updateContent` on `window` when it re-renders the body — re-run `hydrate_all` and re-apply theme there. This is also where the render→refresh handshake completes: a fence that was pending on the previous pass now carries its host SVG and gets mounted (the `data-fsl-hydrated` guard keeps already-live fences untouched).
 - A theme `MutationObserver` on `document.body`'s `class` catches live theme switches without a preview re-render.
 
 - [ ] **Step 1: write the failing theme test**
@@ -1033,9 +1682,11 @@ Expected: PASS (3 tests).
 ```typescript
 /**
  *  Preview-webview entry point.  Registers jssm's web components, hydrates
- *  every fsl fence placeholder, keeps hydration current across preview
- *  re-renders (`vscode.markdown.updateContent`), and keeps the instances'
- *  theme in step with the VS Code theme.
+ *  every ready fsl fence placeholder (mounting the live IDE around the
+ *  host-rendered SVG), keeps hydration current across preview re-renders
+ *  (`vscode.markdown.updateContent` — where late-arriving host SVGs get
+ *  mounted), and keeps the instances' theme in step with the VS Code theme.
+ *  No `<fsl-viz>` / viz define is imported: the diagram is host-rendered.
  */
 import 'jssm/wc/instance/define';
 import 'jssm/wc/widgets/define';
@@ -1043,12 +1694,16 @@ import 'jssm/wc/widgets/define';
 import { hydrate_all }            from './hydrate.js';
 import { theme_for_body_classes } from './theme.js';
 
-/** Injected once: error-box styling + fence spacing. */
+/** Injected once: error-box styling, static-viz surface, and fence spacing. */
 const STYLES = `
   .fsl-error-box { border: 2px solid #c53; border-radius: 4px; padding: 8px 12px; margin: 8px 0; }
   .fsl-error-box strong { color: #c53; display: block; margin-bottom: 4px; }
   .fsl-error-box pre { margin: 0; white-space: pre-wrap; }
   .fsl-fence { margin: 8px 0; }
+  /* Host SVG is theme-fixed (Graphviz palette baked at render time); a solid
+     light ground keeps it legible under a dark VS Code theme. */
+  .fsl-static-viz { background: #ffffff; border-radius: 4px; padding: 4px; overflow: auto; }
+  .fsl-static-viz svg { max-width: 100%; height: auto; }
 `;
 
 function inject_styles(): void {
@@ -1114,15 +1769,16 @@ Write `notes/manual-test-checklist.md` and check each item against the running p
 # Manual verification — vscode-fsl
 
 - [ ] Traffic-light fence renders a live diagram (not a code block)
-- [ ] Clicking an action button transitions the machine; viz highlight follows
-- [ ] info-panel shows current state + legal actions and updates on click
+- [ ] Fence first shows escaped source, then the SVG appears on its own (host render → auto preview refresh) — no manual refresh
+- [ ] Diagram layout is static per render: transitions move only the highlight, never re-lay-out the graph
+- [ ] Clicking an action button transitions the machine; the current-state highlight moves to the new node
 - [ ] width=300 fence is 300px wide
 - [ ] ```js fence still renders as a normal highlighted code block
-- [ ] Broken fence shows the FSL error box with the source visible beneath
+- [ ] Broken fence shows the FSL error box with the source visible beneath (appears even before any host SVG)
 - [ ] Editing the .md re-renders the preview; machines re-hydrate (no double-mount, no dead panels)
-- [ ] Switching VS Code light/dark theme restyles the instances without reload
+- [ ] Switching VS Code light/dark theme restyles the IDE chrome without reload (host SVG stays its fixed light palette on its white ground — expected)
 - [ ] Two fsl fences in one document run independently
-- [ ] No errors in the webview devtools console (Developer: Open Webview Developer Tools)
+- [ ] No webview WASM/CSP error in the console — Graphviz runs host-side, not in the webview (Developer: Open Webview Developer Tools)
 ```
 
 Record pass/fail per item in the file. Fix what fails before proceeding — each fix gets its own conventional commit.
