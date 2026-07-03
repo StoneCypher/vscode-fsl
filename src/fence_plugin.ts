@@ -11,7 +11,8 @@ import type { FenceDescriptor, FenceDimension } from 'jssm';
  *  plugin's point of view.
  *
  *  @example
- *  const get_svg: GetSvg = (source, desc) => cache.get(svg_cache_key(source, desc)) ?? null;
+ *  const get_svg: GetSvg = (source, desc) =>
+ *    cache.get(svg_cache_key(source, dimension_to_css(desc.width), dimension_to_css(desc.height))) ?? null;
  */
 export type GetSvg = (source: string, desc: FenceDescriptor) => string | null;
 
