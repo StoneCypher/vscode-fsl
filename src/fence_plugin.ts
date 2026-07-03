@@ -36,7 +36,7 @@ export interface FslFencePluginOptions {
  */
 export function dimension_to_css(dim: FenceDimension | null): string {
   if (dim === null) { return ''; }
-  return `${dim.value}${dim.unit === 'percent' ? '%' : 'px'}`;
+  return `${String(dim.value)}${dim.unit === 'percent' ? '%' : 'px'}`;
 }
 
 /**
@@ -72,7 +72,7 @@ export function fsl_fence_plugin(md: MarkdownIt, options: FslFencePluginOptions)
     const token = tokens[idx];
     if (token === undefined) { return ''; }
 
-    const info = token.info ?? '';
+    const info = token.info;
     if (fsl_fence_lang(info) === null) {
       return prior !== undefined
         ? prior.call(this, tokens, idx, opts, env, self)
