@@ -54,7 +54,7 @@ export class LruCache {
 
   constructor(capacity: number) {
     if (!Number.isInteger(capacity) || capacity < 1) {
-      throw new RangeError(`LruCache capacity must be a positive integer, got ${capacity}`);
+      throw new RangeError(`LruCache capacity must be a positive integer, got ${String(capacity)}`);
     }
     this.#capacity = capacity;
   }
@@ -76,7 +76,8 @@ export class LruCache {
     this.#map.delete(key);
     this.#map.set(key, value);
     while (this.#map.size > this.#capacity) {
-      const oldest = this.#map.keys().next().value as string;
+      const oldest = this.#map.keys().next().value;
+      if (oldest === undefined) { break; }
       this.#map.delete(oldest);
     }
   }
