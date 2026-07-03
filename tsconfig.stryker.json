@@ -1,3 +1,6 @@
 {
-  "extends": "./tsconfig.json"
+  // tsconfig.json is now a references-only solution file (no compilerOptions
+  // of its own — see its header comment), so Stryker's type-checked mutant
+  // compilation extends the actual src project directly.
+  "extends": "./tsconfig.src.json"
 }

@@ -1,0 +1,31 @@
+{
+  // Type-checking-only project covering everything under src/, including the
+  // *.spec.ts / *.stoch.ts / *.mutat.ts suites in src/tests/ that
+  // tsconfig.src.json deliberately excludes (so its declaration emit stays
+  // test-free — see that file's header comment). This config exists so:
+  //   - `npx tsc -p tsconfig.tests.json` can type-check the tests as part
+  //     of the build (wired into the `typescript_tests` build stage).
+  //   - VS Code, via the root tsconfig.json's project references, resolves
+  //     spec files under a real project instead of falling back to an
+  //     inferred project — which lacks bundler-style resolution and
+  //     misreports imports like `../svg_cache.js` as TS2307.
+  //
+  // allowJs/checkJs is on because a few relocated "machinery" tests
+  // (src/tests/build_config.spec.ts, build_config.stoch.ts,
+  // postinstall.spec.ts) import plain .js modules from src/build_js/,
+  // which is otherwise excluded from every tsc project. checkJs stays off
+  // so those .js files aren't newly subjected to strict type-checking as a
+  // side effect of this file.
+  "extends": "./tsconfig.src.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["src"],
+  "exclude": []
+}

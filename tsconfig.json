@@ -1,34 +1,24 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file.
   //
-  // The extension is bundled by esbuild (src/scripts/build.mjs); this tsc pass
-  // exists to typecheck and to emit .d.ts declarations into build/ts for the
-  // `dts` (copy to dist/) and `attw` stages. It never emits JavaScript.
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "types": ["node", "vscode"],
-
-    // Declarations only — esbuild owns the JS bundling.
-    "emitDeclarationOnly": true,
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "build/ts",
-    "rootDir": "src"
-  },
-  "include": ["src"],
-  "exclude": [
-    "src/tests/**",
-    "src/build_js/**",
-    "src/scripts/**",
-    "**/*.spec.ts",
-    "**/*.stoch.ts",
-    "**/*.mutat.ts"
+  // Solution-style root config (TypeScript project references). It has no
+  // inputs of its own ("files": []) — it exists purely so VS Code's TS
+  // server can discover both sub-projects below and route each open file
+  // to the project that actually includes it. Without this, files excluded
+  // from tsconfig.src.json (src/tests/**, *.spec.ts, etc.) fell back to an
+  // inferred/orphan project with no bundler-style module resolution, which
+  // misreported ordinary relative imports (e.g. `../svg_cache.js`) as
+  // TS2307 "Cannot find module".
+  //
+  // This is NOT a `tsc --build` setup — neither sub-project references the
+  // other's output, so each is still driven directly and independently:
+  //   npx tsc -p tsconfig.src.json    # declarations-only emit (src, no tests)
+  //   npx tsc -p tsconfig.tests.json  # type-check only (all of src incl. tests)
+  // Running `npx tsc -p tsconfig.json` itself is a deliberate no-op (no
+  // "include"/"files" to compile); it's read by the IDE, not by any script.
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.src.json" },
+    { "path": "./tsconfig.tests.json" }
   ]
 }
