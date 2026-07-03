@@ -9,10 +9,18 @@ import type { FenceDescriptor, FenceDimension } from 'jssm';
  *  async host render and later trigger a preview refresh (see extension.ts) —
  *  but this function itself is synchronous and side-effect-free from the
  *  plugin's point of view.
+ *
+ *  @example
+ *  const get_svg: GetSvg = (source, desc) => cache.get(svg_cache_key(source, desc)) ?? null;
  */
 export type GetSvg = (source: string, desc: FenceDescriptor) => string | null;
 
-/** Options bag for {@link fsl_fence_plugin}. */
+/**
+ *  Options bag for {@link fsl_fence_plugin}.
+ *
+ *  @example
+ *  fsl_fence_plugin(md, { get_svg } satisfies FslFencePluginOptions);
+ */
 export interface FslFencePluginOptions {
   /** Synchronous cached-SVG lookup; see {@link GetSvg}. */
   get_svg: GetSvg;

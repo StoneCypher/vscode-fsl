@@ -1,6 +1,11 @@
 import { fsl_to_svg_string } from 'jssm/viz';
 
-/** Optional Graphviz render flags — only the engine override is surfaced here. */
+/**
+ *  Optional Graphviz render flags — only the engine override is surfaced here.
+ *
+ *  @example
+ *  const opts: RenderOpts = { engine: 'dot' };
+ */
 export interface RenderOpts {
   /** Graphviz layout engine (e.g. `'dot'`, `'neato'`, `'circo'`). */
   engine?: string;
