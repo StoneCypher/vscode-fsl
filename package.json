@@ -26,7 +26,6 @@
   },
   "license": "MIT",
   "author": "John Haugeland <stonecypher@gmail.com>",
-  "type": "module",
   "engines": {
     "vscode": "^1.90.0"
   },
