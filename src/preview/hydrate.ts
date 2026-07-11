@@ -1,3 +1,4 @@
+import { sm } from 'jssm';
 import { highlight_state } from './highlight.js';
 
 /** Marker attribute preventing double-hydration across preview re-renders. */
@@ -58,6 +59,40 @@ function wire_highlighting(instance: FslInstanceElement, viz: Element): void {
 }
 
 /**
+ *  Validate FSL by constructing a machine; returns the error message on
+ *  failure, `null` on success.  Constructing is the only complete
+ *  validation — anything less accepts source the instance would choke on.
+ *
+ *  @example
+ *  validate_fsl('a -> b;');   // null
+ *  validate_fsl('a -> -> ;'); // 'jssm parse error: …'
+ */
+export function validate_fsl(source: string): string | null {
+  try {
+    void sm`${source}`;
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+/**
+ *  Prepend a visible error box (spec §4.9: never a silent blank) to a fence,
+ *  leaving the escaped source visible beneath it.
+ */
+function render_error_box(fence: HTMLElement, message: string): void {
+  const doc   = fence.ownerDocument;
+  const box   = doc.createElement('div');
+  box.className = 'fsl-error-box';
+  const title = doc.createElement('strong');
+  title.textContent = 'FSL error';
+  const body  = doc.createElement('pre');
+  body.textContent = message;
+  box.append(title, body);
+  fence.prepend(box);
+}
+
+/**
  *  Replace one *ready* `.fsl-fence` placeholder (one that already carries a
  *  host-rendered `.fsl-fence-svg`) with a live `<fsl-instance>` composition:
  *  the host SVG in the `viz` slot, plus toolbar + actions + footer
@@ -67,9 +102,16 @@ function wire_highlighting(instance: FslInstanceElement, viz: Element): void {
  *  render is still in flight; the next preview refresh hydrates it) and is NOT
  *  marked hydrated.  Idempotent for ready fences via `data-fsl-hydrated`.
  *
+ *  Before any of that, the source is validated via {@link validate_fsl}. On
+ *  invalid FSL — regardless of whether a host SVG is present — the fence gets
+ *  a visible `.fsl-error-box` (spec §4.9: never a silent blank) prepended
+ *  ahead of the still-visible escaped source, no `<fsl-instance>` is mounted,
+ *  and the fence is marked hydrated so the error is not re-validated on every
+ *  preview refresh.
+ *
  *  @example
  *  hydrate_fence(document.querySelector('.fsl-fence')!);
- *  // a ready fence now contains <fsl-instance>…</fsl-instance>
+ *  // a ready, valid fence now contains <fsl-instance>…</fsl-instance>
  */
 export function hydrate_fence(fence: HTMLElement): void {
 
@@ -77,6 +119,13 @@ export function hydrate_fence(fence: HTMLElement): void {
 
   const doc    = fence.ownerDocument;
   const source = fence.querySelector('.fsl-fence-source')?.textContent ?? '';
+
+  const error = validate_fsl(source);
+  if (error !== null) {
+    fence.setAttribute(HYDRATED, 'true');   // don't re-run on every preview update
+    render_error_box(fence, error);
+    return;
+  }
 
   const svg_holder = fence.querySelector('.fsl-fence-svg');
   if (svg_holder === null) { return; }   // pending: host render not ready yet
