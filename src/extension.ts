@@ -13,6 +13,14 @@ const REFRESH_DEBOUNCE_MS = 120;
  *  module is absent — the import only resolves in the real extension host.
  *  Manually verified in Task 8 (the refresh loop isn't reachable from vitest).
  *
+ *  The import and the command execution fail differently and are handled
+ *  separately: a failure to import `'vscode'` means we're simply not running
+ *  in the extension host (e.g. under vitest) — expected, and silent. Once the
+ *  import succeeds, though, we ARE in the host, so a rejection from
+ *  `executeCommand` itself is a real failure and is reported with
+ *  `console.warn('[fsl] preview refresh failed:', err)` instead of being
+ *  swallowed.
+ *
  *  @example
  *  const refresh = make_refresh_trigger();
  *  refresh();  // schedules a debounced `markdown.preview.refresh` (no-op outside the extension host)
@@ -22,9 +30,9 @@ function make_refresh_trigger(): () => void {
   return () => {
     if (timer !== undefined) { clearTimeout(timer); }
     timer = setTimeout(() => {
-      void import('vscode')
-        .then((v) => v.commands.executeCommand('markdown.preview.refresh'))
-        .catch(() => { /* not in the extension host (e.g. tests) — nothing to refresh */ });
+      void import('vscode').then((v) => v.commands.executeCommand('markdown.preview.refresh').then(undefined, (err: unknown) => {
+        console.warn('[fsl] preview refresh failed:', err);
+      })).catch(() => { /* not in the extension host (e.g. tests) — nothing to refresh */ });
     }, REFRESH_DEBOUNCE_MS);
   };
 }

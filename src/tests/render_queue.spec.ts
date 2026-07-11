@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { create_render_queue } from '../render_queue.js';
 import type { FenceDescriptor } from 'jssm';
 
@@ -10,6 +10,8 @@ const desc = (): FenceDescriptor =>
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 describe('create_render_queue', () => {
+
+  afterEach(() => { vi.restoreAllMocks(); });
 
   it('returns null on first miss, renders once, then serves the cached SVG', async () => {
     const render   = vi.fn(async () => '<svg data-ok="1"></svg>');
@@ -32,18 +34,23 @@ describe('create_render_queue', () => {
     expect(render).toHaveBeenCalledOnce();
   });
 
-  it('swallows a render rejection: stays null, never fires on_ready, does not throw', async () => {
-    const render   = vi.fn(async () => { throw new Error('bad fsl'); });
+  it('warns (does not throw) on a render rejection: stays null, never fires on_ready', async () => {
+    const warn     = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const err      = new Error('bad fsl');
+    const render   = vi.fn(async () => { throw err; });
     const on_ready = vi.fn();
     const q = create_render_queue({ render, on_ready });
     expect(q.get_svg('bad', desc())).toBeNull();
     await flush();
     expect(on_ready).not.toHaveBeenCalled();
     expect(q.get_svg('bad', desc())).toBeNull();
+    expect(warn).toHaveBeenCalledExactlyOnceWith('[fsl] fence render failed:', err);
   });
 
   it('a rejected key is never retried: get_svg keeps returning null and render is not re-invoked', async () => {
-    const render = vi.fn(async () => { throw new Error('bad fsl'); });
+    const warn   = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const err    = new Error('bad fsl');
+    const render = vi.fn(async () => { throw err; });
     const q = create_render_queue({ render, on_ready: () => {} });
     expect(q.get_svg('bad', desc())).toBeNull();
     await flush();
@@ -51,6 +58,7 @@ describe('create_render_queue', () => {
     expect(q.get_svg('bad', desc())).toBeNull(); // second pass: must not re-enqueue
     await flush();
     expect(render).toHaveBeenCalledOnce(); // still just once
+    expect(warn).toHaveBeenCalledExactlyOnceWith('[fsl] fence render failed:', err); // warned once, not per re-check
   });
 
   it('regression: a key evicted from the cache is re-enqueued on its next get_svg (not stuck null forever)', async () => {

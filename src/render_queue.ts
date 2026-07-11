@@ -43,10 +43,12 @@ export interface RenderQueue {
  *  miss enqueues `deps.render` at most once per key and returns `null` while
  *  the render is outstanding.  On success the SVG is cached and
  *  `deps.on_ready` fires so the caller can refresh the preview; on rejection
- *  the key is marked failed for the rest of the session (see below) and
- *  `get_svg` keeps returning `null` for it, without ever calling `on_ready` or
- *  throwing.  Purely in-memory and vscode-free, so its cache/dedupe/eviction/
- *  error behavior is unit-tested with fake deps.
+ *  the key is marked failed for the rest of the session (see below), the
+ *  rejection reason is reported via `console.warn('[fsl] fence render
+ *  failed:', err)` so a broken render is visible instead of silently
+ *  swallowed, and `get_svg` keeps returning `null` for it, without ever
+ *  calling `on_ready` or throwing.  Purely in-memory and vscode-free, so its
+ *  cache/dedupe/eviction/error behavior is unit-tested with fake deps.
  *
  *  In-flight and failed keys are tracked in two sets *separate* from the LRU
  *  cache itself:
@@ -101,7 +103,7 @@ export function create_render_queue(deps: RenderQueueDeps): RenderQueue {
       pending.add(key);
       void deps.render(source).then(
         (svg) => { pending.delete(key); cache.set(key, svg); deps.on_ready(); },
-        ()    => { pending.delete(key); failed.add(key); /* unrenderable: suppress retries this session; the hydrator shows the parse error */ },
+        (err: unknown) => { pending.delete(key); failed.add(key); console.warn('[fsl] fence render failed:', err); /* unrenderable: suppress retries this session; the hydrator shows the parse error */ },
       ).catch(() => { /* defensive: a throw in the fulfilled handler above must never surface as an unhandled rejection */ });
     }
     return null;
