@@ -26,18 +26,33 @@ interface FslInstanceElement extends HTMLElement {
  *  component is never defined in unit tests) and only runs in the real webview.
  *  Subscriptions live for the preview's lifetime (fences are long-lived); a
  *  live rebuild swaps the machine, so we re-subscribe on `fsl-machine-rebuilt`.
+ *
+ *  The very first `subscribe()`/`paint()` pair (run the instant
+ *  `fsl-instance` is defined) races the component's own async machine build
+ *  from its `<script type="text/fsl">` child, so a throw there is an
+ *  *expected* transient and stays silent. Once that pair has run once
+ *  (`ready` flips true), `fsl-machine-rebuilt` only ever fires after the
+ *  component reports its machine rebuilt — so a throw from `instance.machine`
+ *  at that point is not the same transient, it is a genuine regression (e.g.
+ *  a jssm API break), and gets a `console.warn` breadcrumb instead of silence.
  */
 function wire_highlighting(instance: FslInstanceElement, viz: Element): void {
   void customElements.whenDefined('fsl-instance').then(() => {
+    let ready = false;
+    const warn_if_ready = (context: string, err: unknown): void => {
+      if (ready) { console.warn(`[fsl] ${context} failed unexpectedly:`, err); }
+    };
     const paint = (): void => {
       try { highlight_state(viz, String(instance.machine.state())); }
-      catch { /* machine not built yet / detached — nothing to paint */ }
+      catch (err) { warn_if_ready('painting the current machine state', err); }
     };
     const subscribe = (): void => {
-      try { instance.machine.on('transition', paint); } catch { /* not ready */ }
+      try { instance.machine.on('transition', paint); }
+      catch (err) { warn_if_ready("subscribing to the machine's transition event", err); }
     };
     subscribe();
     paint();
+    ready = true;
     instance.addEventListener('fsl-machine-rebuilt', () => { subscribe(); paint(); });
   });
 }

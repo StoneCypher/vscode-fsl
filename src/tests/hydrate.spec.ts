@@ -1,6 +1,37 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { hydrate_fence, hydrate_all } from '../preview/hydrate.js';
+
+/** Minimal machine double: {@link FakeMachine.state} answers the current
+ *  state name, {@link FakeMachine.on} records the transition subscriber. */
+class FakeMachine {
+  constructor(private readonly name: string) {}
+  state(): string { return this.name; }
+  on(_event: 'transition', _cb: () => void): () => void { return () => {}; }
+}
+
+/** Stub `<fsl-instance>` whose `machine` getter throws until
+ *  {@link StubFslInstance.machine} is assigned a {@link FakeMachine},
+ *  simulating the real component's async machine build from its
+ *  `<script type="text/fsl">` child. */
+class StubFslInstance extends HTMLElement {
+  #machine: FakeMachine | null = null;
+  get machine(): FakeMachine {
+    if (this.#machine === null) { throw new Error('machine not built yet'); }
+    return this.#machine;
+  }
+  set machine(m: FakeMachine | null) { this.#machine = m; }
+}
+
+if (customElements.get('fsl-instance') === undefined) {
+  customElements.define('fsl-instance', StubFslInstance);
+}
+
+/** Flush the microtask queue so `customElements.whenDefined(...).then(...)`
+ *  callbacks queued during a synchronous call have run. */
+async function flush_microtasks(): Promise<void> {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+}
 
 /** Build a placeholder div as fence_plugin emits it. Pass `svg` for a cache-hit
  *  fence (mounts) or `null` for a still-pending one (source-only). */
@@ -108,6 +139,43 @@ describe('hydrate_all', () => {
     make_fence('c -> d;');
     hydrate_all(document);
     expect(document.querySelectorAll('fsl-instance').length).toBe(2);
+  });
+
+});
+
+describe('wire_highlighting (exercised through hydrate_fence)', () => {
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('stays silent when the machine is not built yet on the very first paint/subscribe', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    // The stub's #machine is never assigned, so `instance.machine` throws on
+    // every access — including this first, expected-transient pair.
+    await flush_microtasks();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns when the machine throws again after a real fsl-machine-rebuilt (post-initial regression)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as unknown as StubFslInstance;
+    // Set the machine before the queued whenDefined().then() callback runs,
+    // so the initial subscribe()/paint() pair succeeds and `ready` flips true.
+    instance.machine = new FakeMachine('a');
+    await flush_microtasks();
+    expect(warn).not.toHaveBeenCalled();
+
+    // Simulate a genuine post-rebuild regression (e.g. a jssm API break):
+    // the machine is unreachable even though the component reports a rebuild.
+    instance.machine = null;
+    instance.dispatchEvent(new Event('fsl-machine-rebuilt'));
+    expect(warn).toHaveBeenCalled();
+    const messages = warn.mock.calls.map(call => String(call[0]));
+    expect(messages.some(m => m.includes('subscribing'))).toBe(true);
+    expect(messages.some(m => m.includes('painting'))).toBe(true);
   });
 
 });
