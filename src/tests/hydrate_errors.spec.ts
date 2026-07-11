@@ -55,4 +55,16 @@ describe('hydrate_fence with invalid FSL', () => {
     expect(fence.querySelector('.fsl-error-box')).toBeNull();
   });
 
+  it('keeps showing the static SVG forever when fsl-viz never upgrades to a real custom element (no shadow root here)', () => {
+    // This file never registers 'fsl-viz', so the mounted element is a plain,
+    // un-upgraded HTMLElement with `shadowRoot === null` — the first-paint
+    // bridge's bail-out branch. The fallback (never a silent blank, per
+    // spec §4.9) is to leave the host-rendered static SVG in place forever.
+    const fence = make_fence('a -> b;', '<svg><g class="node"><title>a</title><ellipse/></g></svg>');
+    expect(() => { hydrate_fence(fence); }).not.toThrow();
+    expect(fence.querySelector('.fsl-fence-svg')).not.toBeNull();
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.display).toBe('none');
+  });
+
 });

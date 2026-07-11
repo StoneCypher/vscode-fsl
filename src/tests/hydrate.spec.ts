@@ -1,34 +1,29 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { hydrate_fence, hydrate_all } from '../preview/hydrate.js';
 
-/** Minimal machine double: {@link FakeMachine.state} answers the current
- *  state name, {@link FakeMachine.on} records the transition subscriber. */
-class FakeMachine {
-  constructor(private readonly name: string) {}
-  state(): string { return this.name; }
-  on(_event: 'transition', _cb: () => void): () => void { return () => {}; }
-}
-
-/** Stub `<fsl-instance>` whose `machine` getter throws until
- *  {@link StubFslInstance.machine} is assigned a {@link FakeMachine},
- *  simulating the real component's async machine build from its
- *  `<script type="text/fsl">` child. */
-class StubFslInstance extends HTMLElement {
-  #machine: FakeMachine | null = null;
-  get machine(): FakeMachine {
-    if (this.#machine === null) { throw new Error('machine not built yet'); }
-    return this.#machine;
+/**
+ *  Stub `<fsl-viz>` with a real (open) shadow root, standing in for jssm's
+ *  Lit-based component. The first-paint bridge (exercised only through
+ *  {@link hydrate_fence} — it is not itself exported) watches this element's
+ *  `shadowRoot` for an `<svg>` to appear; writing
+ *  `<div class="container"><svg></svg></div>` into `shadowRoot` simulates
+ *  the live component's own successful Graphviz render landing, without
+ *  spinning up the real Lit component (slow/flaky per the task brief — this
+ *  is a real, driven DOM mutation, not a fake/pre-baked assertion).
+ */
+class StubFslViz extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
   }
-  set machine(m: FakeMachine | null) { this.#machine = m; }
+}
+if (customElements.get('fsl-viz') === undefined) {
+  customElements.define('fsl-viz', StubFslViz);
 }
 
-if (customElements.get('fsl-instance') === undefined) {
-  customElements.define('fsl-instance', StubFslInstance);
-}
-
-/** Flush the microtask queue so `customElements.whenDefined(...).then(...)`
- *  callbacks queued during a synchronous call have run. */
+/** Flush the microtask queue so a `MutationObserver` callback queued during a
+ *  synchronous DOM mutation has run. */
 async function flush_microtasks(): Promise<void> {
   await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
@@ -67,13 +62,12 @@ describe('hydrate_fence', () => {
     expect(script?.textContent).toBe('a -> b;');
   });
 
-  it('puts the host SVG in a .fsl-static-viz viz slot and mounts NO fsl-viz', () => {
+  it('mounts a live fsl-viz in the viz slot and no static viz-slot div', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
-    const viz = fence.querySelector('div.fsl-static-viz[slot="viz"]');
+    const viz = fence.querySelector('fsl-viz[slot="viz"]');
     expect(viz).not.toBeNull();
-    expect(viz!.querySelector('svg')).not.toBeNull();
-    expect(fence.querySelector('fsl-viz')).toBeNull();
+    expect(fence.querySelector('.fsl-static-viz')).toBeNull();
   });
 
   it('mounts toolbar, actions, and footer into their slots', () => {
@@ -119,6 +113,7 @@ describe('hydrate_fence', () => {
     hydrate_fence(fence);
     hydrate_fence(fence);
     expect(fence.querySelectorAll('fsl-instance').length).toBe(1);
+    expect(fence.querySelectorAll('fsl-viz').length).toBe(1);
   });
 
   it('leaves a still-pending fence (no .fsl-fence-svg) unhydrated', () => {
@@ -143,39 +138,36 @@ describe('hydrate_all', () => {
 
 });
 
-describe('wire_highlighting (exercised through hydrate_fence)', () => {
+describe('first-paint bridge (exercised through hydrate_fence)', () => {
 
-  afterEach(() => { vi.restoreAllMocks(); });
-
-  it('stays silent when the machine is not built yet on the very first paint/subscribe', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('keeps the host-rendered static SVG visible and the live instance hidden right after mount', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
-    // The stub's #machine is never assigned, so `instance.machine` throws on
-    // every access — including this first, expected-transient pair.
-    await flush_microtasks();
-    expect(warn).not.toHaveBeenCalled();
+    expect(fence.querySelector('.fsl-fence-svg')).not.toBeNull();
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.display).toBe('none');
   });
 
-  it('warns when the machine throws again after a real fsl-machine-rebuilt (post-initial regression)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('swaps to the live viz once it paints a real svg, removing the static SVG and revealing the instance', async () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
-    const instance = fence.querySelector('fsl-instance') as unknown as StubFslInstance;
-    // Set the machine before the queued whenDefined().then() callback runs,
-    // so the initial subscribe()/paint() pair succeeds and `ready` flips true.
-    instance.machine = new FakeMachine('a');
+    const viz = fence.querySelector('fsl-viz') as HTMLElement;
+    viz.shadowRoot!.innerHTML = '<div class="container"><svg></svg></div>';
     await flush_microtasks();
-    expect(warn).not.toHaveBeenCalled();
+    expect(fence.querySelector('.fsl-fence-svg')).toBeNull();
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.display).toBe('');
+  });
 
-    // Simulate a genuine post-rebuild regression (e.g. a jssm API break):
-    // the machine is unreachable even though the component reports a rebuild.
-    instance.machine = null;
-    instance.dispatchEvent(new Event('fsl-machine-rebuilt'));
-    expect(warn).toHaveBeenCalled();
-    const messages = warn.mock.calls.map(call => String(call[0]));
-    expect(messages.some(m => m.includes('subscribing'))).toBe(true);
-    expect(messages.some(m => m.includes('painting'))).toBe(true);
+  it('does not swap while the shadow root has no svg yet', async () => {
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    const viz = fence.querySelector('fsl-viz') as HTMLElement;
+    viz.shadowRoot!.innerHTML = '<div class="container"></div>';
+    await flush_microtasks();
+    expect(fence.querySelector('.fsl-fence-svg')).not.toBeNull();
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.display).toBe('none');
   });
 
 });

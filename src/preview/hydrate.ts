@@ -1,62 +1,16 @@
 import { sm } from 'jssm';
-import { highlight_state } from './highlight.js';
 
 /** Marker attribute preventing double-hydration across preview re-renders. */
 const HYDRATED = 'data-fsl-hydrated';
 
 /** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor;
- *  no `<fsl-viz>` (the host-rendered SVG fills the `viz` slot instead); and no
- *  `fsl-info-panel` for 0.1.0 (deliberate §5.2 deviation: jssm 5.157.x does not
+ *  no `fsl-info-panel` for 0.1.0 (deliberate §5.2 deviation: jssm 5.157.x does not
  *  register the component — the slot returns when a jssm release ships it). */
 const PANELS: readonly (readonly [tag: string, slot: string])[] = [
   ['fsl-toolbar', 'toolbar'],
   ['fsl-actions', 'actions'],
   ['fsl-footer',  'footer'],
 ];
-
-/** Minimal structural view of `<fsl-instance>` the highlight wiring relies on
- *  after the element upgrades (see instance.js `get machine()` / `machine.on`). */
-interface FslInstanceElement extends HTMLElement {
-  machine: { state(): unknown; on(event: 'transition', cb: () => void): () => void };
-}
-
-/**
- *  Subscribe the static viz SVG to the instance's machine so the current state
- *  stays highlighted across transitions.  Deferred behind
- *  `customElements.whenDefined('fsl-instance')` so it is inert in jsdom (the
- *  component is never defined in unit tests) and only runs in the real webview.
- *  Subscriptions live for the preview's lifetime (fences are long-lived); a
- *  live rebuild swaps the machine, so we re-subscribe on `fsl-machine-rebuilt`.
- *
- *  The very first `subscribe()`/`paint()` pair (run the instant
- *  `fsl-instance` is defined) races the component's own async machine build
- *  from its `<script type="text/fsl">` child, so a throw there is an
- *  *expected* transient and stays silent. Once that pair has run once
- *  (`ready` flips true), `fsl-machine-rebuilt` only ever fires after the
- *  component reports its machine rebuilt — so a throw from `instance.machine`
- *  at that point is not the same transient, it is a genuine regression (e.g.
- *  a jssm API break), and gets a `console.warn` breadcrumb instead of silence.
- */
-function wire_highlighting(instance: FslInstanceElement, viz: Element): void {
-  void customElements.whenDefined('fsl-instance').then(() => {
-    let ready = false;
-    const warn_if_ready = (context: string, err: unknown): void => {
-      if (ready) { console.warn(`[fsl] ${context} failed unexpectedly:`, err); }
-    };
-    const paint = (): void => {
-      try { highlight_state(viz, String(instance.machine.state())); }
-      catch (err) { warn_if_ready('painting the current machine state', err); }
-    };
-    const subscribe = (): void => {
-      try { instance.machine.on('transition', paint); }
-      catch (err) { warn_if_ready("subscribing to the machine's transition event", err); }
-    };
-    subscribe();
-    paint();
-    ready = true;
-    instance.addEventListener('fsl-machine-rebuilt', () => { subscribe(); paint(); });
-  });
-}
 
 /**
  *  Validate FSL by constructing a machine; returns the error message on
@@ -93,25 +47,92 @@ function render_error_box(fence: HTMLElement, message: string): void {
 }
 
 /**
+ *  Reveal `instance` (currently `display: none`) and drop the fence's
+ *  host-rendered static SVG (`static_holder`) the instant the live `viz`
+ *  element has painted real content into its own shadow DOM — the seam that
+ *  hides Task 10a's ~1 s asm.js Graphviz warmup behind the already-visible
+ *  static SVG instead of a blank pane.
+ *
+ *  `<fsl-viz>` publishes no "render succeeded" event — only a `viz-error`
+ *  `CustomEvent` on failure (`node_modules/jssm/dist/wc/viz.js`,
+ *  `_rerenderFromHostMachine`) — so there is no single first-class contract
+ *  signal to await here. The least heuristic option actually available is a
+ *  `MutationObserver` on the component's own shadow root (Lit's default
+ *  `{ mode: 'open' }`, `node_modules/@lit/reactive-element/.../reactive-element.js`
+ *  `createRenderRoot`): it fires the instant an `<svg>` lands under
+ *  `.container`, the literal DOM effect a successful render produces
+ *  (`viz.js` `render()`: `` html`<div class="container">${unsafeHTML(this._svg)}</div>` ``).
+ *  This observes a real, standard DOM API (`Element.shadowRoot`) but infers
+ *  success from Lit's rendering side effect rather than a documented event —
+ *  flagged here as the honest answer, since no better contract exists today.
+ *
+ *  A render that fails (`viz-error`) is deliberately NOT special-cased: no
+ *  mutation ever lands, so this simply never fires and the fence keeps
+ *  showing the static SVG forever — spec §4.9's "never a silent blank"
+ *  applies just as well to a failed live re-render as to a missing one.
+ *
+ *  Inert when `viz` never upgrades to a real custom element (`shadowRoot`
+ *  stays `null` — e.g. a unit test that never defines `fsl-viz`, or a
+ *  runtime without the component registered): the fence then keeps the
+ *  static SVG forever, the same safe fallback.
+ *
+ *  @example
+ *  wire_first_paint_bridge(vizEl, instanceEl, staticSvgHolder);
+ *  // staticSvgHolder stays visible / instanceEl stays display:none until
+ *  // vizEl's shadow root gains a real <svg>, then they swap.
+ */
+function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_holder: Element): void {
+
+  const has_painted = (root: ShadowRoot): boolean => root.querySelector('.container svg') !== null;
+
+  const reveal = (): void => {
+    static_holder.remove();
+    instance.style.display = '';
+  };
+
+  const root = viz.shadowRoot;
+  if (root === null) { return; }   // never upgraded to a real custom element
+
+  if (has_painted(root)) { reveal(); return; }
+
+  const observer = new MutationObserver(() => {
+    if (has_painted(root)) { observer.disconnect(); reveal(); }
+  });
+  observer.observe(root, { childList: true, subtree: true });
+
+}
+
+/**
  *  Replace one *ready* `.fsl-fence` placeholder (one that already carries a
  *  host-rendered `.fsl-fence-svg`) with a live `<fsl-instance>` composition:
- *  the host SVG in the `viz` slot, plus toolbar + actions + footer
- *  (never an editor).  The FSL source travels in a `<script type="text/fsl">`
- *  child — jssm's safe channel for source containing `<` or `&`.  A fence with
- *  no `.fsl-fence-svg` yet is left as its escaped-source placeholder (the host
- *  render is still in flight; the next preview refresh hydrates it) and is NOT
- *  marked hydrated.  Idempotent for ready fences via `data-fsl-hydrated`.
+ *  an empty `<fsl-viz>` in the `viz` slot — which self-binds to the
+ *  instance's own machine (`node_modules/jssm/dist/wc/viz.js`
+ *  `connectedCallback`'s nested-mode path) and genuinely re-renders via
+ *  Graphviz (Task 10a's in-webview asm.js engine) on every transition — plus
+ *  toolbar + actions + footer (never an editor).  The FSL source travels in
+ *  a `<script type="text/fsl">` child — jssm's safe channel for source
+ *  containing `<` or `&`.  A fence with no `.fsl-fence-svg` yet is left as
+ *  its escaped-source placeholder (the host render is still in flight; the
+ *  next preview refresh hydrates it) and is NOT marked hydrated. Idempotent
+ *  for ready fences via `data-fsl-hydrated`.
  *
  *  Before any of that, the source is validated via {@link validate_fsl}. On
- *  invalid FSL — regardless of whether a host SVG is present — the fence gets
- *  a visible `.fsl-error-box` (spec §4.9: never a silent blank) prepended
- *  ahead of the still-visible escaped source, no `<fsl-instance>` is mounted,
- *  and the fence is marked hydrated so the error is not re-validated on every
- *  preview refresh.
+ *  invalid FSL — regardless of whether a host SVG is present — the fence
+ *  gets a visible `.fsl-error-box` (spec §4.9: never a silent blank)
+ *  prepended ahead of the still-visible escaped source, no `<fsl-instance>`
+ *  is mounted, and the fence is marked hydrated so the error is not
+ *  re-validated on every preview refresh.
+ *
+ *  First paint: the instance mounts `display: none` and the fence keeps
+ *  showing its host-rendered `.fsl-fence-svg` until the live `<fsl-viz>`
+ *  actually paints its own SVG; see {@link wire_first_paint_bridge} for the
+ *  swap. This hides the asm.js engine's warmup behind the already-visible
+ *  static SVG rather than a blank pane.
  *
  *  @example
  *  hydrate_fence(document.querySelector('.fsl-fence')!);
- *  // a ready, valid fence now contains <fsl-instance>…</fsl-instance>
+ *  // a ready, valid fence now shows the static SVG, with a hidden,
+ *  // self-rendering <fsl-instance> that swaps in once it paints
  */
 export function hydrate_fence(fence: HTMLElement): void {
 
@@ -131,8 +152,9 @@ export function hydrate_fence(fence: HTMLElement): void {
   if (svg_holder === null) { return; }   // pending: host render not ready yet
   fence.setAttribute(HYDRATED, 'true');
 
-  const instance = doc.createElement('fsl-instance') as FslInstanceElement;
+  const instance = doc.createElement('fsl-instance');
   instance.setAttribute('theme', 'light');
+  instance.style.display = 'none';   // hidden until the live viz's first paint
 
   const width  = fence.getAttribute('data-width')  ?? '';
   const height = fence.getAttribute('data-height') ?? '';
@@ -144,11 +166,8 @@ export function hydrate_fence(fence: HTMLElement): void {
   title.textContent = 'FSL machine';
   instance.appendChild(title);
 
-  const viz = doc.createElement('div');
+  const viz = doc.createElement('fsl-viz');
   viz.setAttribute('slot', 'viz');
-  viz.className = 'fsl-static-viz';
-  const svg_el = svg_holder.querySelector('svg');
-  if (svg_el !== null) { viz.appendChild(svg_el); }   // move the trusted, parsed SVG node
   instance.appendChild(viz);
 
   for (const [tag, slot] of PANELS) {
@@ -166,9 +185,9 @@ export function hydrate_fence(fence: HTMLElement): void {
   script.textContent = source;
   instance.appendChild(script);
 
-  fence.replaceChildren(instance);
+  fence.replaceChildren(svg_holder, instance);
 
-  wire_highlighting(instance, viz);
+  wire_first_paint_bridge(viz, instance, svg_holder);
 
 }
 
