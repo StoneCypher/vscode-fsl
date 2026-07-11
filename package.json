@@ -76,7 +76,8 @@
   "dependencies": {
     "@viz-js/viz": "^3",
     "jssm": "^5.157.0",
-    "lit": "^3"
+    "lit": "^3",
+    "viz.js": "^2.1.2"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

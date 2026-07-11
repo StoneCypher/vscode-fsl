@@ -55,6 +55,14 @@ const previewResult = await build({
   sourcemap   : true,
   metafile    : true,
   logOverride : { 'empty-import-meta': 'silent' },
+  // The preview webview's markdown-preview CSP blocks WebAssembly, which
+  // @viz-js/viz needs — but allows plain asm.js. Alias jssm's viz pipeline
+  // (and jssm/dist/wc/widgets.js's static import of it) over to a shim
+  // backed by viz.js@2's asm.js Graphviz build, which reimplements the
+  // exact `instance().renderString(dot, opts)` surface jssm consumes.
+  // Preview-bundle only — the extension-host bundle keeps the real,
+  // faster WASM @viz-js/viz (no CSP there).
+  alias: { '@viz-js/viz': abs('src/preview/viz_asm_shim.ts') },
 });
 
 await writeFile(abs('build/esbuild/extension.meta.json'), JSON.stringify(extensionResult.metafile), 'utf8');
