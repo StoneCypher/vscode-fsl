@@ -40,6 +40,54 @@ describe('highlight_state', () => {
     }
   });
 
+  it('matches a jssm-slugged node title (host-rendered SVG has lowercased, hyphenated titles)', () => {
+    const holder = document.createElement('div');
+    holder.innerHTML =
+      '<svg><g class="graph">' +
+      '<g class="node"><title>red</title><polygon/><text>Red</text></g>' +
+      '</g></svg>';
+    const svg = holder.querySelector('svg')!;
+    highlight_state(svg, 'Red');
+    const polygon = svg.querySelector('polygon') as SVGElement;
+    expect(polygon.style.stroke).not.toBe('');
+  });
+
+  it('slugs a multi-word state the same way jssm slugs its node titles', () => {
+    const holder = document.createElement('div');
+    holder.innerHTML =
+      '<svg><g class="graph">' +
+      '<g class="node"><title>foo-bar</title><ellipse/></g>' +
+      '</g></svg>';
+    const svg = holder.querySelector('svg')!;
+    highlight_state(svg, 'Foo Bar');
+    const ellipse = svg.querySelector('ellipse') as SVGElement;
+    expect(ellipse.style.stroke).not.toBe('');
+  });
+
+  it('still matches an exact, unslugged title (compatibility with unslugged SVGs)', () => {
+    const holder = document.createElement('div');
+    holder.innerHTML =
+      '<svg><g class="graph">' +
+      '<g class="node"><title>Red</title><ellipse/></g>' +
+      '</g></svg>';
+    const svg = holder.querySelector('svg')!;
+    highlight_state(svg, 'Red');
+    const ellipse = svg.querySelector('ellipse') as SVGElement;
+    expect(ellipse.style.stroke).not.toBe('');
+  });
+
+  it('is a no-op for a state that matches neither the raw nor the slugged title', () => {
+    const holder = document.createElement('div');
+    holder.innerHTML =
+      '<svg><g class="graph">' +
+      '<g class="node"><title>red</title><ellipse/></g>' +
+      '</g></svg>';
+    const svg = holder.querySelector('svg')!;
+    highlight_state(svg, 'Blue');
+    const ellipse = svg.querySelector('ellipse') as SVGElement;
+    expect(ellipse.style.stroke).toBe('');
+  });
+
 });
 
 describe('clear_highlights', () => {
