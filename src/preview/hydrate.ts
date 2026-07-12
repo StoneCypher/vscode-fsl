@@ -206,8 +206,11 @@ export function hydrate_fence(fence: HTMLElement): void {
 
 /**
  *  Hydrate every ready `.fsl-fence` placeholder under `root`.  Safe to call
- *  repeatedly (per-fence idempotence guard); pending fences are skipped and
- *  picked up on a later call after their SVG lands.
+ *  repeatedly (per-fence idempotence guard); a *valid* fence still waiting on
+ *  its host SVG is skipped and picked up on a later call once it lands, but
+ *  an *invalid* fence is never skipped — it gets its `.fsl-error-box`
+ *  immediately, whether or not an SVG has arrived (spec §4.9: never a silent
+ *  blank).
  *
  *  @example
  *  hydrate_all(document);
