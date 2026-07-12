@@ -72,7 +72,7 @@ describe('buildPlan — defaults', () => {
       );
       expect(stages[2]?.sort()).toEqual(['bundle', 'dts', 'update_madlibs'].sort());
       expect(stages[3]?.sort()).toEqual(['terser', 'viz_png'].sort());
-      expect(stages[4]?.sort()).toEqual(['attw', 'docs'].sort());
+      expect(stages[4]?.sort()).toEqual(['attw', 'docs', 'verify_dist_entrypoints'].sort());
       expect(stages[5]).toEqual(['site']);
       expect(disabled).toEqual([]);
       expect(warnings).toEqual([]);

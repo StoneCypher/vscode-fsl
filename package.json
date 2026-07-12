@@ -57,6 +57,7 @@
     "typescript_tests": "tsc -p tsconfig.tests.json",
     "bundle": "node src/scripts/build.mjs",
     "terser": "node src/build_js/minify_bundles.js && cp dist/preview.js dist/preview.js.map docs",
+    "verify_dist_entrypoints": "node src/build_js/verify_dist_entrypoints.js",
     "dts": "cp build/ts/*.d.ts build/ts/*.d.ts.map dist/",
     "viz_png": "node src/build_js/render_visualizations.js && cp build/esbuild/visualizations/bundle_*.png . && cp build/esbuild/visualizations/bundle_*.png docs/ && cp build/esbuild/visualizations/bundle_*.png docs/docs/",
     "site": "cp src/html/* docs && cp src/html/.nojekyll docs && cp README.md docs/ && cp src/html/*.png docs/docs",
