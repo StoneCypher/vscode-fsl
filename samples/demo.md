@@ -18,6 +18,14 @@ Not ours (must stay a normal code block):
 const x = 1;
 ```
 
+Stochastic (enables the Stochastic toolbar action):
+
+```fsl
+Working 80% -> Working;
+Working 20% -> Broken;
+Broken 'fix' -> Working;
+```
+
 Broken on purpose (error-box case):
 
 ```fsl
