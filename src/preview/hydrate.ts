@@ -129,6 +129,12 @@ function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_hol
  *  swap. This hides the asm.js engine's warmup behind the already-visible
  *  static SVG rather than a blank pane.
  *
+ *  `data-width`/`data-height` (spec §5.2 — explicit fence tokens always win)
+ *  become the instance's inline `width`/`height` style when present; an
+ *  absent `data-height` instead adds the `fsl-autoheight` marker class, the
+ *  hook preview.ts's stylesheet uses to cap an unsized diagram at a default
+ *  viewport-scale height instead of letting it stretch page-tall.
+ *
  *  @example
  *  hydrate_fence(document.querySelector('.fsl-fence')!);
  *  // a ready, valid fence now shows the static SVG, with a hidden,
@@ -159,7 +165,14 @@ export function hydrate_fence(fence: HTMLElement): void {
   const width  = fence.getAttribute('data-width')  ?? '';
   const height = fence.getAttribute('data-height') ?? '';
   if (width  !== '') { instance.style.width  = width;  }
-  if (height !== '') { instance.style.height = height; }
+  if (height !== '') {
+    instance.style.height = height;
+  } else {
+    // No explicit height= token: mark for the stylesheet's default
+    // viewport-scale diagram cap (preview.ts STYLES, `.fsl-autoheight`) so an
+    // unsized narrow-tall graph letterboxes instead of stretching page-tall.
+    instance.classList.add('fsl-autoheight');
+  }
 
   const title = doc.createElement('span');
   title.setAttribute('slot', 'title');

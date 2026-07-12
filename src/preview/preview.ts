@@ -29,6 +29,23 @@ const STYLES = `
      the live fsl-viz's first-paint bridge removes it (see hydrate.js). */
   .fsl-fence-svg { background: #ffffff; border-radius: 4px; padding: 4px; overflow: auto; }
   .fsl-fence-svg svg { max-width: 100%; height: auto; }
+  /* Default diagram size cap (no explicit width=/height= fence token — spec
+     §5.2 explicit sizing always wins over this default). An unsized
+     narrow-tall graph would otherwise stretch to the preview's full width
+     and follow its aspect ratio to several screens tall (jssm's <fsl-viz>
+     shadow CSS sizes its container to width:100%/height:100% of its host —
+     node_modules/jssm/dist/wc/viz.js); capping the host's box here
+     letterboxes the graph instead, since the underlying SVG carries a
+     viewBox + default preserveAspectRatio. max-width applies to every
+     instance regardless of sizing so it never overflows the preview pane;
+     the max-height cap is scoped to the unsized case only. */
+  .fsl-fence fsl-instance { max-width: 100%; }
+  .fsl-fence fsl-instance.fsl-autoheight fsl-viz[slot="viz"] { max-height: 70vh; }
+  /* Matching cap on the first-paint static SVG so pre-swap and post-swap
+     presentation agree. [data-height=""] is the "no explicit height" marker
+     fence_plugin.ts already stamps on every unsized fence at render time —
+     true from first paint, before hydrate.js ever runs. */
+  .fsl-fence[data-height=""] .fsl-fence-svg svg { max-height: 70vh; }
 `;
 
 function inject_styles(): void {

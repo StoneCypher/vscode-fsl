@@ -108,6 +108,20 @@ describe('hydrate_fence', () => {
     expect(instance.style.height).toBe('50%');
   });
 
+  it('marks the instance autoheight when no explicit height= is set', () => {
+    const fence = make_fence('a -> b;');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.classList.contains('fsl-autoheight')).toBe(true);
+  });
+
+  it('does not mark the instance autoheight when an explicit height= is set', () => {
+    const fence = make_fence('a -> b;', undefined, '', '50%');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.classList.contains('fsl-autoheight')).toBe(false);
+  });
+
   it('is idempotent — a second call does not double-mount', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
