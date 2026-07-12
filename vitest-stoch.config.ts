@@ -22,7 +22,19 @@ export default defineConfig({
   test: {
     include: ['src/**/*.stoch.ts'],
     exclude: ['dist/**', 'node_modules/**', 'src/**/e2e/**'],
-    passWithNoTests: true,
+    // 2026-07-12 (final-review I2): a real stochastic suite exists now
+    // (build_config.stoch.ts), so a glob regression that matched zero files
+    // should fail loudly rather than pass silently.
+    passWithNoTests: false,
+    // No numeric coverage.thresholds here (deliberately, not an oversight):
+    // `coverage.include` below only tracks `src/**/*.ts`, and the one
+    // stochastic suite that exists today (build_config.stoch.ts) exercises
+    // build_config.js — a `.js` file under src/build_js/ that this include
+    // glob doesn't match at all. Measured .ts coverage from this config is
+    // therefore 0% across the board by construction, not by regression;
+    // thresholds would either be meaninglessly-0 or spuriously fail on the
+    // first new .ts-targeting stochastic test. Revisit once a stochastic
+    // test exercises a src/**/*.ts module directly.
     coverage: {
       enabled: true,
       reportsDirectory: './coverage-stoch',
