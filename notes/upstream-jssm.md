@@ -68,6 +68,18 @@ default-off by contents is smart, but the human must be able to turn a control
 back on (the user may add stochastic weights next edit). Disabled-with-no-
 override is the defect, esp. in editor-bearing embeddings.
 
+## 7. 5.162.x: CJS type surface diverged from ESM (BUG, found 2026-07-12)
+
+jssm.es5.d.cts (served to `require`-condition consumers) no longer exports
+`parse_fence_info`, `fsl_fence_lang`, `FenceDescriptor`, `FenceDimension`
+(and possibly more), while jssm.es6.d.ts still does and the CJS RUNTIME
+(dist/jssm.es5.cjs) still exports them all. Types-only break: every CJS-typed
+consumer fails typecheck on upgrade. Found by vscode-fsl attempting the
+5.157.6 → 5.162.10 bump (reverted). Suggest a CI parity check between the two
+declaration surfaces. Note the new `./fence` subpath exports a different,
+render-oriented set (render_fence_gif, transform_markdown, …), so it is not a
+relocation of the parse API.
+
 ## 6. fsl-info-panel: ship request (EXISTING)
 
 jssm 5.157.x does not register fsl-info-panel; vscode-fsl 0.1.0 holds its slot
