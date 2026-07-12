@@ -26,7 +26,7 @@ Red -> Green -> Yellow -> Red;
 ```
 ````
 
-The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (a stochastic machine, ready for when jssm ships stochastic tooling).
+The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (ready for when jssm ships its stochastic tooling).
 
 &nbsp;
 

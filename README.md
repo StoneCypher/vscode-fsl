@@ -1,12 +1,12 @@
 # FSL Markdown Preview v0.1.0
 
-> Version 0.1.0 was built on Sunday, July 12, 2026 at GMT-07:00 `1783870741119` from hash `f3aaa5c`.
+> Version 0.1.0 was built on Sunday, July 12, 2026 at GMT-07:00 `1783871173045` from hash `f2a179b`.
 
 A VS Code extension that renders ` ```fsl ` and ` ```jssm ` fenced code blocks in
 the Markdown **preview** as live, interactive [FSL](https://github.com/StoneCypher/jssm)
 state machines — the full `<fsl-instance>` IDE, minus the editor.
 
-<!-- Supported embeds: 1783870741119 Sunday, July 12, 2026 at GMT-07:00 87.5 3 66 f3aaa5c 0 3 90 87 0.1.0 -->
+<!-- Supported embeds: 1783871173045 Sunday, July 12, 2026 at GMT-07:00 87.5 3 66 f2a179b 0 3 90 87 0.1.0 -->
 
 &nbsp;
 
@@ -26,7 +26,7 @@ Red -> Green -> Yellow -> Red;
 ```
 ````
 
-The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (a stochastic machine, ready for when jssm ships stochastic tooling).
+The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (ready for when jssm ships its stochastic tooling).
 
 &nbsp;
 
