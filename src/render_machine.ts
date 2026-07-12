@@ -18,10 +18,13 @@ export interface RenderOpts {
  *  the source fails to parse or lay out, so the caller caches nothing and the
  *  hydrator surfaces the parse error instead of a broken diagram.
  *
- *  The output is the raw pipeline SVG.  (`<fsl-viz>` additionally reorders the
- *  paint stack via a private, un-exported helper for edge-label layering; we
- *  do not depend on that internal, and our highlighting targets state *nodes*,
- *  which the reorder does not affect — see Task 5.)
+ *  The output is the raw pipeline SVG, used only for the fence's first paint /
+ *  graceful degradation.  (`<fsl-viz>` additionally reorders the paint stack
+ *  via a private, un-exported helper for edge-label layering; we do not
+ *  depend on that internal.)  The live diagram shown after first paint is a
+ *  separate, self-rendering `<fsl-viz>` mounted in-webview (see
+ *  `src/preview/hydrate.ts`), which re-renders itself on every transition and
+ *  needs no support from this module.
  *
  *  @param source FSL machine source (the fence body).
  *  @param opts   Optional engine override.
