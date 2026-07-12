@@ -3,6 +3,10 @@
 Written 2026-07-12 by the vscode-fsl session for the jssm-repo session. Items
 ordered by urgency for vscode-fsl; #1 blocks a shipping fix.
 
+FILED 2026-07-12 in the fsl tracker (jssm uses fsl's tracker), per John:
+item 1 → StoneCypher/fsl#1934 · item 2 → #1935 · item 3 → #1936 ·
+item 4 → #1937 · item 5 → #1938 · item 6 → #1939 · item 7 → #1940.
+
 ## 1. fsl-viz: SVG overflows an auto-height host (BUG, fix requested)
 
 **Repro:** give `<fsl-viz>` no explicit height but constrain it externally
