@@ -18,7 +18,7 @@ Not ours (must stay a normal code block):
 const x = 1;
 ```
 
-Stochastic (enables the Stochastic toolbar action):
+Stochastic (weighted transitions; jssm 5.157.x ships no stochastic toolbar control yet):
 
 ```fsl
 Working 80% -> Working;

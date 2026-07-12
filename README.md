@@ -1,12 +1,12 @@
 # FSL Markdown Preview v0.1.0
 
-> Version 0.1.0 was built on Sunday, July 12, 2026 at GMT-07:00 `1783869405010` from hash `a913f68`.
+> Version 0.1.0 was built on Sunday, July 12, 2026 at GMT-07:00 `1783870741119` from hash `f3aaa5c`.
 
 A VS Code extension that renders ` ```fsl ` and ` ```jssm ` fenced code blocks in
 the Markdown **preview** as live, interactive [FSL](https://github.com/StoneCypher/jssm)
 state machines — the full `<fsl-instance>` IDE, minus the editor.
 
-<!-- Supported embeds: 1783869405010 Sunday, July 12, 2026 at GMT-07:00 87.5 3 66 a913f68 0 3 90 87 0.1.0 -->
+<!-- Supported embeds: 1783870741119 Sunday, July 12, 2026 at GMT-07:00 87.5 3 66 f3aaa5c 0 3 90 87 0.1.0 -->
 
 &nbsp;
 
@@ -26,7 +26,7 @@ Red -> Green -> Yellow -> Red;
 ```
 ````
 
-The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (for the Export/Simulation tooling).
+The fence becomes a live, interactive traffic-light state machine — click an action button and watch the diagram re-render. `samples/demo.md` in this repo is a runnable walkthrough of every supported case: a plain fence, a sized fence, a non-`fsl` fence left as an ordinary code block, a broken fence's error box, and a stochastic machine (a stochastic machine, ready for when jssm ships stochastic tooling).
 
 &nbsp;
 
@@ -136,7 +136,7 @@ The very first frame you see is different: it's rendered host-side (outside any 
 ## Known issues (0.1.0)
 
 - **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934); [fsl#1937](https://www.github.com/stonecypher/fsl/issues/1937) tracks a future `max-width=`/`max-height=` fence token this extension would consume once it ships. Workaround: give the fence an explicit `height=` (or `width=`) token.
-- **No `info-panel` slot.** jssm 5.157.x doesn't yet register the `fsl-info-panel` component, so this extension holds that slot out of the live IDE entirely for 0.1.0 rather than render an empty gap — [fsl#1939](https://www.github.com/stonecypher/fsl/issues/1939). It returns automatically the first time this extension is rebuilt against a jssm release that ships the component; no change needed on this side.
+- **No `info-panel` slot.** jssm 5.157.x doesn't yet register the `fsl-info-panel` component, so this extension holds that slot out of the live IDE entirely for 0.1.0 rather than render an empty gap — [fsl#1939](https://www.github.com/stonecypher/fsl/issues/1939). When jssm ships the component, a small code change here (adding the panel to `src/preview/hydrate.ts`'s `PANELS` array) will restore it.
 - **No Stochastic toolbar control.** jssm 5.157.x's toolbar offers Validate, Lint, Layout, Export, and Theme — there's no Stochastic action to enable or disable for a stochastic machine in this version; the control doesn't exist yet upstream.
 
 &nbsp;
@@ -146,10 +146,11 @@ The very first frame you see is different: it's rendered host-side (outside any 
 ```bash
 npm install
 npm run build      # full pipeline: tests, typecheck, lint, bundle, TypeDoc, changelog, site
-npx vitest run      # just the unit + stochastic suites — faster, for iteration
+npx vitest run      # just the unit suite — faster, for iteration
+npm run just_test   # unit + stochastic + mutation-config
 ```
 
-`npm test` currently runs the same full pipeline as `npm run build`, not a quick test-only pass — use `npx vitest run` while iterating.
+`npm test` currently runs the same full pipeline as `npm run build`, not a quick test-only pass — use `npx vitest run` while iterating, or `npm run just_test` for comprehensive test coverage including stochastic tests.
 
 Press **F5** in VS Code to launch the Extension Development Host (`.vscode/launch.json`), then open a Markdown file with an `fsl`/`jssm` fence and preview it.
 
