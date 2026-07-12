@@ -50,8 +50,6 @@ state machines — the full `<fsl-instance>` IDE, minus the editor.
 * [Builds](https://www.github.com/stonecypher/vscode-fsl/actions)
 * [Source](https://www.github.com/stonecypher/vscode-fsl/)
 
-<img alt="star_chart" src="https://starchart.cc/StoneCypher/vscode-fsl.svg" />
-
 <table>
   <tr>
     <td><img alt="sunburst visualization" src="bundle_sunburst.png" /></td>
