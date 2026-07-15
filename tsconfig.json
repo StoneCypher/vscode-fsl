@@ -1,49 +1,24 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
-  "compilerOptions": {
-    // File Layout
-    // "rootDir": "./src",
-    "outDir": "./build/ts/",
-
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "target": "esnext",
-    "types": ["vitest/globals", "node"],
-    // "lib": ["esnext"],
-    // "types": ["DOM"],
-    // and npm install -D @types/node
-
-    // Other Outputs
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "allowUnreachableCode": false,
-    "allowUnusedLabels": false,
-    "isolatedDeclarations": true,
-
-    // Style Options
-    "noImplicitReturns": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
-    "strict": true,
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
-  },
-  "include": ["./src/ts/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "**/*.stoch.ts", "**/*.mutat.ts"]
+  // Visit https://aka.ms/tsconfig to read more about this file.
+  //
+  // Solution-style root config (TypeScript project references). It has no
+  // inputs of its own ("files": []) — it exists purely so VS Code's TS
+  // server can discover both sub-projects below and route each open file
+  // to the project that actually includes it. Without this, files excluded
+  // from tsconfig.src.json (src/tests/**, *.spec.ts, etc.) fell back to an
+  // inferred/orphan project with no bundler-style module resolution, which
+  // misreported ordinary relative imports (e.g. `../svg_cache.js`) as
+  // TS2307 "Cannot find module".
+  //
+  // This is NOT a `tsc --build` setup — neither sub-project references the
+  // other's output, so each is still driven directly and independently:
+  //   npx tsc -p tsconfig.src.json    # declarations-only emit (src, no tests)
+  //   npx tsc -p tsconfig.tests.json  # type-check only (all of src incl. tests)
+  // Running `npx tsc -p tsconfig.json` itself is a deliberate no-op (no
+  // "include"/"files" to compile); it's read by the IDE, not by any script.
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.src.json" },
+    { "path": "./tsconfig.tests.json" }
+  ]
 }

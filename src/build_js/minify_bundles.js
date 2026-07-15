@@ -1,19 +1,20 @@
 /**
- * Minifies the three Rollup output bundles (ESM, CJS, IIFE) in parallel using terser's Node API.
+ * Minifies the two esbuild output bundles (the extension host bundle and the
+ * preview webview bundle) in parallel using terser's Node API.
  *
- * Replaces the previous three-stage serial terser CLI chain. Each bundle is an
- * independent input/output pair with its own source map, so the work parallelizes
- * cleanly via Promise.all.
+ * esbuild writes both bundles to dist/ already; this pass minifies them in
+ * place. Each bundle is an independent input/output pair with its own source
+ * map, so the work parallelizes cleanly via Promise.all.
  *
- * Reads from build/rollup/index.{mjs,cjs,iife.js} (+ matching .map files) and
- * writes to dist/index.{mjs,cjs,iife.js} (+ matching .map files). The output
- * source maps preserve the input maps' content so debuggers can trace minified
- * code back through Rollup all the way to the original TypeScript source.
+ * Reads dist/{extension,preview}.js (+ matching .map files) and writes the
+ * minified code + a fresh source map back to the same paths. The output source
+ * maps preserve the input maps' content so debuggers can trace minified code
+ * back through esbuild all the way to the original TypeScript source.
  *
  * @example
  *   // Invoked by the `terser` npm script:
  *   node src/build_js/minify_bundles.js
- *   // Writes the three minified bundles + source maps into dist/
+ *   // Minifies dist/extension.js and dist/preview.js (+ source maps) in place
  */
 
 import { readFile, writeFile } from 'fs/promises';
@@ -24,25 +25,23 @@ import { minify } from 'terser';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '..', '..');
-const BUILD_ROLLUP = join(PROJECT_ROOT, 'build', 'rollup');
 const DIST = join(PROJECT_ROOT, 'dist');
 
 const BUNDLES = [
-  { name: 'index.mjs' },
-  { name: 'index.cjs' },
-  { name: 'index.iife.js' },
+  { name: 'extension.js' },
+  { name: 'preview.js' },
 ];
 
 /**
- * Minify one Rollup bundle and write the minified code + source map to dist/.
+ * Minify one esbuild bundle in dist/ and write the result back in place.
  *
- * @param {{ name: string }} bundle - The bundle filename (relative to build/rollup and dist)
+ * @param {{ name: string }} bundle - The bundle filename (relative to dist)
  * @returns {Promise<void>} Resolves once both output files are written
  *
  * @throws {Error} If terser reports an error or no code is produced
  */
 async function minifyOne({ name }) {
-  const inputPath = join(BUILD_ROLLUP, name);
+  const inputPath = join(DIST, name);
   const inputMapPath = `${inputPath}.map`;
   const outputPath = join(DIST, name);
   const outputMapPath = `${outputPath}.map`;

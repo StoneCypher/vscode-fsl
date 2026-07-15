@@ -1,0 +1,44 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file.
+  //
+  // The extension is bundled by esbuild (src/scripts/build.mjs); this tsc pass
+  // exists to typecheck and to emit .d.ts declarations into build/ts for the
+  // `dts` (copy to dist/) and `attw` stages. It never emits JavaScript.
+  //
+  // Test files (src/tests/**, **/*.spec.ts, **/*.stoch.ts, **/*.mutat.ts) are
+  // deliberately excluded so the emitted declarations stay build-artifact
+  // clean — they're type-checked separately by tsconfig.tests.json. This
+  // file is "composite" so the root tsconfig.json (a references-only
+  // solution file) can point VS Code at it for src/ files; run it directly
+  // with `npx tsc -p tsconfig.src.json` (no `--build` needed).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": ["node", "vscode"],
+
+    // Declarations only — esbuild owns the JS bundling.
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "build/ts",
+    "rootDir": "src",
+
+    // Referenceable from the root solution tsconfig.json.
+    "composite": true
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/tests/**",
+    "src/build_js/**",
+    "src/scripts/**",
+    "**/*.spec.ts",
+    "**/*.stoch.ts",
+    "**/*.mutat.ts"
+  ]
+}

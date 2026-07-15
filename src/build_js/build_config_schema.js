@@ -20,20 +20,26 @@ import { z } from 'zod';
  */
 export const FEATURES = {
   // mandatory — always run; not toggleable
-  clean:          { stages: [0], mandatory: true, script: 'clean' },
-  typescript:     { stages: [1], mandatory: true, script: 'typescript' },
-  just_test_save: { stages: [1], mandatory: true, script: 'just_test_save' },
-  rollup:         { stages: [2], mandatory: true, script: 'rollup' },
-  dts:            { stages: [2], mandatory: true, script: 'dts' },
-  update_madlibs: { stages: [2], mandatory: true, script: 'update_madlibs' },
+  clean:            { stages: [0], mandatory: true, script: 'clean' },
+  typescript:       { stages: [1], mandatory: true, script: 'typescript' },
+  typescript_tests: { stages: [1], mandatory: true, script: 'typescript_tests' },
+  just_test_save:   { stages: [1], mandatory: true, script: 'just_test_save' },
+  bundle:           { stages: [2], mandatory: true, script: 'bundle' },
+  dts:              { stages: [2], mandatory: true, script: 'dts' },
+  update_madlibs:   { stages: [2], mandatory: true, script: 'update_madlibs' },
+  // Not toggleable: this is the automated guard for the type:module loader
+  // incident's own postmortem lesson ("test the minified artifact"). Stage 4
+  // runs after stage 3's optional `terser` pass, so it inspects whatever
+  // dist/extension.js the build actually produced. See verify_dist_entrypoints.js.
+  verify_dist_entrypoints: { stages: [4], mandatory: true, script: 'verify_dist_entrypoints' },
 
   // optional — default on; can be toggled via config / env / CLI
   docs:      { stages: [1, 4], optional: true, defaultEnabled: true, script: 'docs' },
   eslint:    { stages: [1],    optional: true, defaultEnabled: true, script: 'eslint' },
   cloc:      { stages: [1],    optional: true, defaultEnabled: true, script: 'cloc' },
   changelog: { stages: [1],    optional: true, defaultEnabled: true, script: 'changelog' },
-  viz_png:   { stages: [3],    optional: true, defaultEnabled: true, script: 'viz_png', requires: ['rollup'] },
-  terser:    { stages: [3],    optional: true, defaultEnabled: true, script: 'terser',  requires: ['rollup'] },
+  viz_png:   { stages: [3],    optional: true, defaultEnabled: true, script: 'viz_png', requires: ['bundle'] },
+  terser:    { stages: [3],    optional: true, defaultEnabled: true, script: 'terser',  requires: ['bundle'] },
   attw:      { stages: [4],    optional: true, defaultEnabled: true, script: 'attw' },
   site:      { stages: [5],    optional: true, defaultEnabled: true, script: 'site',    requires: ['docs'] },
 };

@@ -1,3 +1,17 @@
+/**
+ * eslint.config.js's `allowDefaultProject: ["*.config.ts"]` type-checks this
+ * root `*.config.ts` file against typescript-eslint's synthesized single-file
+ * "default project" rather than tsconfig.src.json/tsconfig.tests.json. That
+ * default project's compiler options come from the root tsconfig.json, which
+ * is a references-only solution file with no `compilerOptions` and therefore
+ * no `strictNullChecks`. The four rules below refuse to run their real
+ * analysis and report a structural "requires strictNullChecks" finding
+ * unconditionally when that option is off — a project-wiring gap, not a code
+ * defect in this file (see .superpowers/sdd/task-8-prep-report.md). Each rule
+ * ships its own documented opt-out for exactly this situation, so that is
+ * used here instead of disabling the rules outright.
+ */
+/* eslint @typescript-eslint/no-unnecessary-boolean-literal-compare: ["error", { "allowRuleToRunWithoutStrictNullChecksIKnowWhatIAmDoing": true }], @typescript-eslint/no-unnecessary-condition: ["error", { "allowRuleToRunWithoutStrictNullChecksIKnowWhatIAmDoing": true }], @typescript-eslint/no-useless-default-assignment: ["error", { "allowRuleToRunWithoutStrictNullChecksIKnowWhatIAmDoing": true }], @typescript-eslint/prefer-nullish-coalescing: ["error", { "allowRuleToRunWithoutStrictNullChecksIKnowWhatIAmDoing": true }] */
 
 import { defineConfig } from 'vitest/config';
 
@@ -7,19 +21,23 @@ export default defineConfig({
 
   test: {
     include: ['src/**/*.mutat.ts'],
-    exclude: ['dist/**', 'node_modules/**', 'src/ts/e2e/**'],
+    exclude: ['dist/**', 'node_modules/**', 'src/**/e2e/**'],
+    // 2026-07-12 (final-review I2): unlike vitest.config.ts and
+    // vitest-stoch.config.ts, this must stay `true` — zero `*.mutat.ts` files
+    // exist anywhere in src/ today. This config's job is to be Stryker's
+    // vitest-runner config (stryker.config.json), not a suite of its own;
+    // "no tests found" is expected reality here, not a regression signal.
+    passWithNoTests: true,
+    // No coverage.thresholds for the same reason: there is nothing to measure
+    // yet. Revisit if/when a *.mutat.ts suite is introduced.
     coverage: {
       enabled: true,
       reportsDirectory: './coverage-mutat',
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.spec.ts', 'src/**/*.stoch.ts', 'src/**/*.mutat.ts'],
-      all: true,
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80
+      exclude: ['src/**/*.spec.ts', 'src/**/*.stoch.ts', 'src/**/*.mutat.ts', 'src/**/e2e/**'],
+      all: true
     },
     globals: true
   },

@@ -95,7 +95,7 @@ async function main() {
     await waitForServer(BASE_URL);
     console.log('Server is ready.');
 
-    execSync('npx playwright test src/ts/e2e', {
+    execSync('npx playwright test src/tests/e2e', {
       cwd: projectRoot,
       stdio: 'inherit',
       env: { ...process.env, BASE_URL }
