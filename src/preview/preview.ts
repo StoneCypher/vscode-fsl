@@ -40,7 +40,12 @@ const STYLES = `
      instance regardless of sizing so it never overflows the preview pane;
      the max-height cap is scoped to the unsized case only. */
   .fsl-fence fsl-instance { max-width: 100%; }
-  .fsl-fence fsl-instance.fsl-autoheight fsl-viz[slot="viz"] { max-height: 70vh; }
+  /* Both halves of the cap: max-height bounds the host box, and jssm >= 5.162.25's
+     documented --jssm-viz-max-height custom property re-threads the same cap
+     through the component's shadow DOM to the rendered svg (aspect preserved,
+     letterboxed). Without the property the inner svg falls back to intrinsic
+     Graphviz size and overflows the capped host (StoneCypher/fsl#1934). */
+  .fsl-fence fsl-instance.fsl-autoheight fsl-viz[slot="viz"] { max-height: 70vh; --jssm-viz-max-height: 70vh; }
   /* Matching cap on the first-paint static SVG so pre-swap and post-swap
      presentation agree. [data-height=""] is the "no explicit height" marker
      fence_plugin.ts already stamps on every unsized fence at render time —
