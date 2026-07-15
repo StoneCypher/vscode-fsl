@@ -20,7 +20,8 @@
 ## Session additions (re-plan 2)
 
 - [x] (a) First-paint bridge: the fence's host-rendered static SVG is visible immediately; the live diagram swaps in within ~2 s (asm.js warmup) — there is NO blank flash between the two
-- [ ] (b) Export / Stochastic toolbar actions are now backed by a real in-webview Graphviz engine (Task 10a) — record whether they actually WORK or go visibly-gracefully-inert; either outcome is acceptable, but an uncaught exception in the webview console is NOT
+- [x] (b) Export / Stochastic toolbar actions are now backed by a real in-webview Graphviz engine (Task 10a) — outcome: Export WORKS (verified 2026-07-12); Stochastic N/A — jssm 5.157.x shipped no stochastic toolbar control (demo.md carries a weighted machine for when one ships)
+- [x] (f) Unsized tall diagram letterboxes at ~70vh instead of overflowing (jssm 5.162.25's --jssm-viz-max-height custom property, upstream fsl#1934; consumed in c8de843) — verified live 2026-07-15
 - [x] (c) Error box on the broken fence is unchanged from the prior walk (still appears, still shows the escaped source beneath it)
 - [x] (d) Editing the document still re-hydrates correctly: the `vscode.markdown.updateContent` handshake fires and fences re-hydrate without a manual refresh
 - [x] (e) Switching the VS Code theme restyles the LIVE diagram too (the fsl-viz inside fsl-instance takes the new theme); the host-rendered first-paint static SVG stays theme-fixed light — expected, not a bug
