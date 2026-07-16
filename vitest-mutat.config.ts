@@ -20,16 +20,18 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 
   test: {
-    include: ['src/**/*.mutat.ts'],
+    // 2026-07-16: this is Stryker's vitest-runner config (stryker.config.json),
+    // and mutants must be exercised by the real unit suite — the previous
+    // mutat-only include matched ZERO files, so Stryker's initial dry run
+    // executed no tests and the CI job aborted ("No tests were executed",
+    // first main-pipeline run). Unit specs are the mutation-testing suite;
+    // *.mutat.ts stays included for any future mutation-specific tests.
+    include: ['src/**/*.spec.ts', 'src/**/*.mutat.ts'],
     exclude: ['dist/**', 'node_modules/**', 'src/**/e2e/**'],
-    // 2026-07-12 (final-review I2): unlike vitest.config.ts and
-    // vitest-stoch.config.ts, this must stay `true` — zero `*.mutat.ts` files
-    // exist anywhere in src/ today. This config's job is to be Stryker's
-    // vitest-runner config (stryker.config.json), not a suite of its own;
-    // "no tests found" is expected reality here, not a regression signal.
-    passWithNoTests: true,
-    // No coverage.thresholds for the same reason: there is nothing to measure
-    // yet. Revisit if/when a *.mutat.ts suite is introduced.
+    passWithNoTests: false,
+    // No coverage.thresholds here: Stryker disables coverage in its runner,
+    // and this config's standalone `just_test` leg measures nothing the unit
+    // config doesn't already gate.
     coverage: {
       enabled: true,
       reportsDirectory: './coverage-mutat',

@@ -6,7 +6,8 @@
     "clear-text",
     "progress"
   ],
-  "ignorePatterns": ["build", "dist", "docs", "coverage", "reports", "**/*.spec.*", "**/*.stoch.*", "**/generated_code/**", "src/build_js/**" ],
+  "ignorePatterns_comment": "ignorePatterns controls what exists in Stryker's SANDBOX, not what gets mutated (the mutate array handles that). Spec files must be present or the vitest runner has no tests to execute - excluding them here was why CI's Stryker job died with 'No tests were executed'.",
+  "ignorePatterns": ["build", "dist", "docs", "coverage", "reports", "**/*.stoch.*", "**/generated_code/**", "src/build_js/**" ],
   "clearTextReporter": {
     "reportMutants": false,
     "reportTests": false,
@@ -16,7 +17,8 @@
   "tsconfigFile": "tsconfig.stryker.json",
   "testRunner": "vitest",
   "vitest": {
-    "configFile": "vitest-mutat.config.ts"
+    "configFile": "vitest-mutat.config.ts",
+    "related": false
   },
   "testRunner_comment": "Take a look at https://stryker-mutator.io/docs/stryker-js/vitest-runner for information about the vitest plugin.",
   "mutate": [
