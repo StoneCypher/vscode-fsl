@@ -1,12 +1,12 @@
 # FSL Markdown Preview v0.2.0
 
-> Version 0.2.0 was built on Wednesday, July 15, 2026 at GMT-07:00 `1784182666354` from hash `17678f9`.
+> Version 0.2.0 was built on Wednesday, July 15, 2026 at GMT-07:00 `1784184799352` from hash `39815d0`.
 
 A VS Code extension that renders ` ```fsl ` and ` ```jssm ` fenced code blocks in
 the Markdown **preview** as live, interactive [FSL](https://github.com/StoneCypher/jssm)
 state machines — the full `<fsl-instance>` IDE, minus the editor.
 
-<!-- Supported embeds: 1784182666354 Wednesday, July 15, 2026 at GMT-07:00 88.04 3 66 17678f9 0 3 116 113 0.2.0 -->
+<!-- Supported embeds: 1784184799352 Wednesday, July 15, 2026 at GMT-07:00 88.04 3 66 39815d0 0 3 116 113 0.2.0 -->
 
 &nbsp;
 
@@ -112,6 +112,16 @@ Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence,
 | `svg` `png` `jpeg` `dot` `gif` (format tokens) | Which output format a *static* host renders | **Ignored** |
 
 This extension is deliberately the grammar's *maximalist* interpreter: VS Code already **is** the editor, so every valid fence always renders the full live `<fsl-instance>` IDE — viz, actions, info-panel, toolbar, title, footer — **minus** the `editor` slot, no matter which element/format tokens the fence carries. Only `width=`/`height=`/`max-width=`/`max-height=` change anything here, because sizing is meaningful in any host. Write the other tokens for wherever else the same Markdown travels; this preview always shows the richest live version regardless.
+
+&nbsp;
+
+## `.fsl` files
+
+The extension declares the `fsl` language for `.fsl` files (comment toggling and
+bracket matching work; syntax colors are a future addition). Once the extension is
+on the Marketplace, VS Code will automatically suggest it to anyone who opens a
+`.fsl` file. The live rendering itself lives in the Markdown preview — `.fsl`
+files are declared for association and editing convenience.
 
 &nbsp;
 

@@ -1,6 +1,7 @@
 **
 !dist/**
 !package.json
+!language-configuration.json
 !README.md
 !CHANGELOG.md
 !LICENSE

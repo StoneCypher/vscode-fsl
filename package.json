@@ -41,6 +41,14 @@
     "onLanguage:markdown"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "fsl",
+        "aliases": ["FSL", "jssm"],
+        "extensions": [".fsl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "markdown.markdownItPlugins": true,
     "markdown.previewScripts": [
       "./dist/preview.js"

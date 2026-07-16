@@ -115,6 +115,16 @@ This extension is deliberately the grammar's *maximalist* interpreter: VS Code a
 
 &nbsp;
 
+## `.fsl` files
+
+The extension declares the `fsl` language for `.fsl` files (comment toggling and
+bracket matching work; syntax colors are a future addition). Once the extension is
+on the Marketplace, VS Code will automatically suggest it to anyone who opens a
+`.fsl` file. The live rendering itself lives in the Markdown preview — `.fsl`
+files are declared for association and editing convenience.
+
+&nbsp;
+
 ## Error handling
 
 Invalid FSL never renders a silent blank. A bordered "FSL error" box appears with the parser's message, and the raw (escaped) source stays visible beneath it:
