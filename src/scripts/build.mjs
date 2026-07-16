@@ -62,6 +62,20 @@ const previewResult = await build({
   // exact `instance().renderString(dot, opts)` surface jssm consumes.
   // Preview-bundle only — the extension-host bundle keeps the real,
   // faster WASM @viz-js/viz (no CSP there).
+  //
+  // jssm 5.162.x ships the configure({ viz }) engine-injection hook this
+  // project originally requested (StoneCypher/fsl#1936) specifically to
+  // remove this alias. Evaluated during the 5.162.32 adoption wave and
+  // kept the alias anyway: configure() only stops jssm/viz's `get_viz()`
+  // (dist/jssm_viz.mjs) from *executing* `import("@viz-js/viz")` at
+  // runtime once a custom engine is injected — it does not change the fact
+  // that the specifier is a literal string inside a dynamic `import()`,
+  // which esbuild (like any bundler) statically resolves and bundles
+  // regardless of whether the guarded branch ever runs. A bundled consumer
+  // still needs to alias or external the module to keep the ~1.2 MB WASM
+  // payload out of the output; configure() only helps un-bundled consumers
+  // (plain ESM/Node) who have no static-analysis step to fool. See
+  // notes/upstream-jssm.md for the upstream-facing writeup of this finding.
   alias: { '@viz-js/viz': abs('src/preview/viz_asm_shim.ts') },
 });
 
