@@ -7,7 +7,10 @@ import css from "@eslint/css";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
-  { ignores: ["src/**/*.spec.*", "src/**/*.stoch.*", "src/**/*.mutat.*", "build/**", "coverage/**", "coverage-stoch/**", "coverage-mutat/**", "dist/**", "docs/**", ".stryker-tmp/**", ".superpowers/**", "notes/**", "typedoc-options.cjs", "**/CHANGELOG.md", "**/CHANGELOG.long.md"] },
+  /* .playwright-browsers is CI-only: workflows set PLAYWRIGHT_BROWSERS_PATH into the
+     workspace, and without the ignore eslint sweeps Chromium's own bundled scripts
+     ('chrome' is not defined) — first main-pipeline run failed exactly there. */
+  { ignores: ["src/**/*.spec.*", "src/**/*.stoch.*", "src/**/*.mutat.*", "build/**", "coverage/**", "coverage-stoch/**", "coverage-mutat/**", "dist/**", "docs/**", ".stryker-tmp/**", ".superpowers/**", ".playwright-browsers/**", "notes/**", "typedoc-options.cjs", "**/CHANGELOG.md", "**/CHANGELOG.long.md"] },
   { files: ["**/*.{js,mjs,cjs,ts,mts,cts}"], plugins: { js }, extends: ["js/recommended"], languageOptions: { globals: globals.browser } },
   { files: ["src/build_js/**/*.{js,cjs}"], languageOptions: { globals: globals.node } },
   ...tseslint.configs.strictTypeChecked.map(cfg => ({ ...cfg, files: ["**/*.{ts,mts,cts}"] })),
