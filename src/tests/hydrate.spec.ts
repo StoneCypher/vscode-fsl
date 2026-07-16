@@ -70,20 +70,20 @@ describe('hydrate_fence', () => {
     expect(fence.querySelector('.fsl-static-viz')).toBeNull();
   });
 
-  it('mounts toolbar, actions, and footer into their slots', () => {
+  it('mounts toolbar, actions, footer, and info-panel into their slots', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
     for (const [tag, slot] of [
-      ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'], ['fsl-footer', 'footer'],
+      ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'], ['fsl-footer', 'footer'], ['fsl-info-panel', 'info-panel'],
     ]) {
       expect(fence.querySelector(`${tag}[slot="${slot}"]`), `${tag} missing`).not.toBeNull();
     }
   });
 
-  it('mounts no info-panel (deliberate §5.2 deviation — jssm 5.157.x does not ship fsl-info-panel)', () => {
+  it('mounts an info-panel into the info-panel slot', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
-    expect(fence.querySelector('fsl-info-panel')).toBeNull();
+    expect(fence.querySelector('fsl-info-panel[slot="info-panel"]')).not.toBeNull();
   });
 
   it('never mounts an editor (spec §5.2 — VS Code is the editor)', () => {

@@ -3,13 +3,12 @@ import { sm } from 'jssm';
 /** Marker attribute preventing double-hydration across preview re-renders. */
 const HYDRATED = 'data-fsl-hydrated';
 
-/** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor;
- *  no `fsl-info-panel` for 0.1.0 (deliberate §5.2 deviation: jssm 5.157.x does not
- *  register the component — the slot returns when a jssm release ships it). */
+/** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor. */
 const PANELS: readonly (readonly [tag: string, slot: string])[] = [
-  ['fsl-toolbar', 'toolbar'],
-  ['fsl-actions', 'actions'],
-  ['fsl-footer',  'footer'],
+  ['fsl-toolbar',    'toolbar'],
+  ['fsl-actions',    'actions'],
+  ['fsl-footer',     'footer'],
+  ['fsl-info-panel', 'info-panel'],
 ];
 
 /**
@@ -109,7 +108,7 @@ function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_hol
  *  instance's own machine (`node_modules/jssm/dist/wc/viz.js`
  *  `connectedCallback`'s nested-mode path) and genuinely re-renders via
  *  Graphviz (Task 10a's in-webview asm.js engine) on every transition — plus
- *  toolbar + actions + footer (never an editor).  The FSL source travels in
+ *  toolbar + actions + info-panel + footer (never an editor).  The FSL source travels in
  *  a `<script type="text/fsl">` child — jssm's safe channel for source
  *  containing `<` or `&`.  A fence with no `.fsl-fence-svg` yet is left as
  *  its escaped-source placeholder (the host render is still in flight; the
