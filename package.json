@@ -1,7 +1,7 @@
 {
   "name": "vscode-fsl",
   "displayName": "FSL Markdown Preview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Live FSL / jssm state machines in VS Code's Markdown preview",
   "publisher": "StoneCypher",
   "keywords": [
