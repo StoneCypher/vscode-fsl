@@ -135,7 +135,7 @@ The very first frame you see is different: it's rendered host-side (outside any 
 
 &nbsp;
 
-## Known issues (0.1.0)
+## Known issues
 
 - **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934). Workaround: give the fence an explicit `height=` (or `width=`) token — or, to preserve natural aspect while still capping growth, an explicit `max-height=` (or `max-width=`) token.
 - **No Stochastic toolbar control.** jssm 5.157.x's toolbar offers Validate, Lint, Layout, Export, and Theme — there's no Stochastic action to enable or disable for a stochastic machine in this version; the control doesn't exist yet upstream.
