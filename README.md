@@ -1,12 +1,12 @@
-# FSL Markdown Preview v0.1.0
+# FSL Markdown Preview v0.2.0
 
-> Version 0.1.0 was built on Sunday, July 12, 2026 at GMT-07:00 `1783871173045` from hash `f2a179b`.
+> Version 0.2.0 was built on Wednesday, July 15, 2026 at GMT-07:00 `1784172004623` from hash `72c62df`.
 
 A VS Code extension that renders ` ```fsl ` and ` ```jssm ` fenced code blocks in
 the Markdown **preview** as live, interactive [FSL](https://github.com/StoneCypher/jssm)
 state machines — the full `<fsl-instance>` IDE, minus the editor.
 
-<!-- Supported embeds: 1783871173045 Sunday, July 12, 2026 at GMT-07:00 87.5 3 66 f2a179b 0 3 90 87 0.1.0 -->
+<!-- Supported embeds: 1784172004623 Wednesday, July 15, 2026 at GMT-07:00 87.57 3 66 72c62df 0 3 109 106 0.2.0 -->
 
 &nbsp;
 
@@ -42,8 +42,8 @@ The fence becomes a live, interactive traffic-light state machine — click an a
   </tr>
   <tr>
     <th>Unit</th>
-    <td>87</td>
-    <td>87.5<small>%</small></td>
+    <td>106</td>
+    <td>87.57<small>%</small></td>
   </tr>
   <tr>
     <th>Stochastic</th>
@@ -59,7 +59,7 @@ The fence becomes a live, interactive traffic-light state machine — click an a
     <th>Documentation coverage</th>
   </tr>
   <tr>
-    <td>90</td>
+    <td>109</td>
     <td>3</td>
     <td>66<small>%</small></td>
   </tr>
@@ -106,10 +106,12 @@ Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence,
 | ` ```fsl ` / ` ```jssm ` | Fence language — activates this extension | Yes, required |
 | `width=N` / `width=N%` | Panel width | Yes |
 | `height=N` / `height=N%` | Panel height | Yes |
+| `max-width=N` / `max-width=N%` | Upper bound on natural panel width (moot if `width=` is also given) | Yes |
+| `max-height=N` / `max-height=N%` | Upper bound on natural panel height (moot if `height=` is also given) | Yes |
 | `image` `code` `editor` `actions` `info-panel` `toolbar` `title` `footer` `ide` (element tokens) | Which slot(s) a *static* host renders | **Ignored** |
 | `svg` `png` `jpeg` `dot` `gif` (format tokens) | Which output format a *static* host renders | **Ignored** |
 
-This extension is deliberately the grammar's *maximalist* interpreter: VS Code already **is** the editor, so every valid fence always renders the full live `<fsl-instance>` IDE — viz, actions, toolbar, title, footer — **minus** the `editor` slot, no matter which element/format tokens the fence carries. Only `width=`/`height=` change anything here, because sizing is meaningful in any host. Write the other tokens for wherever else the same Markdown travels; this preview always shows the richest live version regardless.
+This extension is deliberately the grammar's *maximalist* interpreter: VS Code already **is** the editor, so every valid fence always renders the full live `<fsl-instance>` IDE — viz, actions, info-panel, toolbar, title, footer — **minus** the `editor` slot, no matter which element/format tokens the fence carries. Only `width=`/`height=`/`max-width=`/`max-height=` change anything here, because sizing is meaningful in any host. Write the other tokens for wherever else the same Markdown travels; this preview always shows the richest live version regardless.
 
 &nbsp;
 
@@ -135,8 +137,7 @@ The very first frame you see is different: it's rendered host-side (outside any 
 
 ## Known issues (0.1.0)
 
-- **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934); [fsl#1937](https://www.github.com/stonecypher/fsl/issues/1937) tracks a future `max-width=`/`max-height=` fence token this extension would consume once it ships. Workaround: give the fence an explicit `height=` (or `width=`) token.
-- **No `info-panel` slot.** jssm 5.157.x doesn't yet register the `fsl-info-panel` component, so this extension holds that slot out of the live IDE entirely for 0.1.0 rather than render an empty gap — [fsl#1939](https://www.github.com/stonecypher/fsl/issues/1939). When jssm ships the component, a small code change here (adding the panel to `src/preview/hydrate.ts`'s `PANELS` array) will restore it.
+- **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934). Workaround: give the fence an explicit `height=` (or `width=`) token — or, to preserve natural aspect while still capping growth, an explicit `max-height=` (or `max-width=`) token.
 - **No Stochastic toolbar control.** jssm 5.157.x's toolbar offers Validate, Lint, Layout, Export, and Theme — there's no Stochastic action to enable or disable for a stochastic machine in this version; the control doesn't exist yet upstream.
 
 &nbsp;
