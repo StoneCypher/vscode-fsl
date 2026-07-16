@@ -138,7 +138,15 @@ function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_hol
  *  tokens) are upper bounds honored only when the corresponding exact
  *  dimension is absent — an exact `width=`/`height=` always wins, the same
  *  precedence jssm itself documents for the tokens. `max-width` becomes the
- *  instance's own `max-width` style. `max-height` targets the mounted
+ *  instance's own `max-width` style, but composed as `min(<max-width>, 100%)`
+ *  rather than the bare token: an inline style is stronger than a stylesheet
+ *  rule regardless of specificity, and preview.ts's
+ *  `.fsl-fence fsl-instance { max-width: 100%; }` pane-overflow safety net
+ *  lives on this same property, so writing the raw token would silently
+ *  defeat that cap and let an oversized author value overflow a narrower
+ *  docked pane; `min()` keeps whichever bound is smaller instead.
+ *
+ *  `max-height` targets the mounted
  *  `<fsl-viz>` child instead of the instance: `fsl-viz`'s shadow DOM sizes
  *  its internal container to `height: 100%` of itself, which only resolves
  *  correctly once `fsl-viz` itself has a definite height, so capping the
@@ -188,7 +196,7 @@ export function hydrate_fence(fence: HTMLElement): void {
   if (width !== '') {
     instance.style.width = width;
   } else if (max_width !== '') {
-    instance.style.maxWidth = max_width;
+    instance.style.maxWidth = `min(${max_width}, 100%)`;
   }
 
   const title = doc.createElement('span');

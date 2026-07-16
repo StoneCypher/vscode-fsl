@@ -124,11 +124,11 @@ describe('hydrate_fence', () => {
     expect(instance.classList.contains('fsl-autoheight')).toBe(false);
   });
 
-  it('applies max-width to the instance style when width is absent', () => {
+  it('composes max-width with the pane overflow cap via min(), rather than replacing it', () => {
     const fence = make_fence('a -> b;', undefined, '', '', '400px');
     hydrate_fence(fence);
     const instance = fence.querySelector('fsl-instance') as HTMLElement;
-    expect(instance.style.maxWidth).toBe('400px');
+    expect(instance.style.maxWidth).toBe('min(400px, 100%)');
     expect(instance.style.width).toBe('');
   });
 
