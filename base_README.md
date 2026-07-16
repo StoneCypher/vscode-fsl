@@ -106,10 +106,22 @@ Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence,
 | ` ```fsl ` / ` ```jssm ` | Fence language — activates this extension | Yes, required |
 | `width=N` / `width=N%` | Panel width | Yes |
 | `height=N` / `height=N%` | Panel height | Yes |
+| `max-width=N` / `max-width=N%` | Upper bound on natural panel width (moot if `width=` is also given) | Yes |
+| `max-height=N` / `max-height=N%` | Upper bound on natural panel height (moot if `height=` is also given) | Yes |
 | `image` `code` `editor` `actions` `info-panel` `toolbar` `title` `footer` `ide` (element tokens) | Which slot(s) a *static* host renders | **Ignored** |
 | `svg` `png` `jpeg` `dot` `gif` (format tokens) | Which output format a *static* host renders | **Ignored** |
 
-This extension is deliberately the grammar's *maximalist* interpreter: VS Code already **is** the editor, so every valid fence always renders the full live `<fsl-instance>` IDE — viz, actions, toolbar, title, footer — **minus** the `editor` slot, no matter which element/format tokens the fence carries. Only `width=`/`height=` change anything here, because sizing is meaningful in any host. Write the other tokens for wherever else the same Markdown travels; this preview always shows the richest live version regardless.
+This extension is deliberately the grammar's *maximalist* interpreter: VS Code already **is** the editor, so every valid fence always renders the full live `<fsl-instance>` IDE — viz, actions, info-panel, toolbar, title, footer — **minus** the `editor` slot, no matter which element/format tokens the fence carries. Only `width=`/`height=`/`max-width=`/`max-height=` change anything here, because sizing is meaningful in any host. Write the other tokens for wherever else the same Markdown travels; this preview always shows the richest live version regardless.
+
+&nbsp;
+
+## `.fsl` files
+
+The extension declares the `fsl` language for `.fsl` files (comment toggling and
+bracket matching work; syntax colors are a future addition). Once the extension is
+on the Marketplace, VS Code will automatically suggest it to anyone who opens a
+`.fsl` file. The live rendering itself lives in the Markdown preview — `.fsl`
+files are declared for association and editing convenience.
 
 &nbsp;
 
@@ -133,10 +145,9 @@ The very first frame you see is different: it's rendered host-side (outside any 
 
 &nbsp;
 
-## Known issues (0.1.0)
+## Known issues
 
-- **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934); [fsl#1937](https://www.github.com/stonecypher/fsl/issues/1937) tracks a future `max-width=`/`max-height=` fence token this extension would consume once it ships. Workaround: give the fence an explicit `height=` (or `width=`) token.
-- **No `info-panel` slot.** jssm 5.157.x doesn't yet register the `fsl-info-panel` component, so this extension holds that slot out of the live IDE entirely for 0.1.0 rather than render an empty gap — [fsl#1939](https://www.github.com/stonecypher/fsl/issues/1939). When jssm ships the component, a small code change here (adding the panel to `src/preview/hydrate.ts`'s `PANELS` array) will restore it.
+- **Unsized diagrams can still overflow.** A fence with no `height=` token is capped at a default viewport-scale height, but a very tall/narrow machine's *live* diagram can still spill past that cap in some cases. Upstream bug: [fsl#1934](https://www.github.com/stonecypher/fsl/issues/1934). Workaround: give the fence an explicit `height=` (or `width=`) token — or, to preserve natural aspect while still capping growth, an explicit `max-height=` (or `max-width=`) token.
 - **No Stochastic toolbar control.** jssm 5.157.x's toolbar offers Validate, Lint, Layout, Export, and Theme — there's no Stochastic action to enable or disable for a stochastic machine in this version; the control doesn't exist yet upstream.
 
 &nbsp;

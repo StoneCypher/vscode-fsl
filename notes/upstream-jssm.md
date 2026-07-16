@@ -88,3 +88,43 @@ relocation of the parse API.
 
 jssm 5.157.x does not register fsl-info-panel; vscode-fsl 0.1.0 holds its slot
 out entirely and will restore it when a release ships the component.
+
+## Follow-up (2026-07-15): #3/#1936's configure({ viz }) shipped, but doesn't remove the alias for bundled consumers
+
+jssm 5.162.x ships `configure({ viz })` exactly as requested in item 3 above
+(`dist/jssm_viz.mjs`, `jssm_viz.es5.d.cts`) — closed as StoneCypher/fsl#1936.
+Evaluated it during the 5.162.32 adoption wave as a replacement for
+vscode-fsl's `@viz-js/viz` → asm.js-shim esbuild alias
+(`src/scripts/build.mjs`). Verdict: **kept the alias**, `configure()` doesn't
+obviate it for a bundled consumer.
+
+`get_viz()` in `dist/jssm_viz.mjs` is:
+```js
+let viz_instance=null;let injected_viz=null;
+async function get_viz(){
+  if(injected_viz!==null){return injected_viz}
+  if(viz_instance===null){const mod=await import("@viz-js/viz");viz_instance=await mod.instance()}
+  return viz_instance
+}
+```
+`configure({ viz })` sets `injected_viz`, so the guarded branch never
+*executes* at runtime once called. But `import("@viz-js/viz")` is a literal
+string inside a dynamic `import()` — bundlers (esbuild included) resolve and
+bundle literal dynamic-import specifiers at build time regardless of whether
+the runtime guard around them ever fires. A bundled consumer in a
+WASM-hostile environment (VS Code's markdown-preview CSP, in vscode-fsl's
+case) still ends up shipping the ~1.2 MB `@viz-js/viz` WASM payload in its
+bundle unless it separately aliases/externals the specifier — at which point
+`configure()` adds nothing `alias` wasn't already doing alone.
+
+`configure()` is genuinely useful for *un-bundled* consumers (plain ESM in a
+browser via import maps, or Node usage) that have no static-analysis step to
+fool — for those, `configure({ viz: myEngine })` alone is enough, no bundler
+tricks required. It just isn't a bundler-agnostic answer to the original ask.
+
+Suggested refinement if upstream wants to fully close the original request
+for bundled consumers too: an alternate entry point / export-map condition
+that omits the `@viz-js/viz` import entirely (throwing or requiring
+`configure()` first) so a bundler has nothing to statically discover in the
+first place — the dynamic-import guard alone can't do this, only the absence
+of the literal specifier can.

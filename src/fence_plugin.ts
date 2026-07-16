@@ -41,8 +41,8 @@ export function dimension_to_css(dim: FenceDimension | null): string {
 
 /**
  *  markdown-it plugin: replaces ```fsl / ```jssm fences with a hydration
- *  placeholder.  The `.fsl-fence` div always carries width/height data
- *  attributes and the HTML-escaped FSL source in a `.fsl-fence-source`
+ *  placeholder.  The `.fsl-fence` div always carries width/height/max-width/
+ *  max-height data attributes and the HTML-escaped FSL source in a `.fsl-fence-source`
  *  pre/code (the graceful-degradation view, and the error path).  On a cache
  *  HIT — `get_svg` returns markup — the host-rendered SVG is additionally
  *  inlined in a `.fsl-fence-svg` child BEFORE the source pre; on a MISS the
@@ -86,7 +86,9 @@ export function fsl_fence_plugin(md: MarkdownIt, options: FslFencePluginOptions)
     const svg_block = svg === null ? '' : `<div class="fsl-fence-svg">${svg}</div>`;
 
     return `<div class="fsl-fence" data-width="${esc(dimension_to_css(desc.width))}"`
-         + ` data-height="${esc(dimension_to_css(desc.height))}">`
+         + ` data-height="${esc(dimension_to_css(desc.height))}"`
+         + ` data-max-width="${esc(dimension_to_css(desc.max_width))}"`
+         + ` data-max-height="${esc(dimension_to_css(desc.max_height))}">`
          + svg_block
          + `<pre class="fsl-fence-source"><code>${esc(token.content)}</code></pre>`
          + `</div>\n`;

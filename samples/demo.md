@@ -12,6 +12,12 @@ Sized:
 Off 'toggle' <-> On;
 ```
 
+Capped growth (natural size, but never taller than 200px — letterboxes instead of stretching):
+
+```fsl max-height=200
+A -> B -> C -> D -> E -> A;
+```
+
 Not ours (must stay a normal code block):
 
 ```js

@@ -1,7 +1,7 @@
 {
   "name": "vscode-fsl",
   "displayName": "FSL Markdown Preview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Live FSL / jssm state machines in VS Code's Markdown preview",
   "publisher": "StoneCypher",
   "keywords": [
@@ -41,6 +41,14 @@
     "onLanguage:markdown"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "fsl",
+        "aliases": ["FSL", "jssm"],
+        "extensions": [".fsl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "markdown.markdownItPlugins": true,
     "markdown.previewScripts": [
       "./dist/preview.js"
@@ -76,7 +84,7 @@
   },
   "dependencies": {
     "@viz-js/viz": "^3",
-    "jssm": "^5.162.25",
+    "jssm": "^5.162.32",
     "lit": "^3",
     "viz.js": "^2.1.2"
   },

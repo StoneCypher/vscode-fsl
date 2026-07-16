@@ -3,13 +3,12 @@ import { sm } from 'jssm';
 /** Marker attribute preventing double-hydration across preview re-renders. */
 const HYDRATED = 'data-fsl-hydrated';
 
-/** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor;
- *  no `fsl-info-panel` for 0.1.0 (deliberate §5.2 deviation: jssm 5.157.x does not
- *  register the component — the slot returns when a jssm release ships it). */
+/** Slotted panels of the always-full-IDE composition (spec §5.2) — no editor. */
 const PANELS: readonly (readonly [tag: string, slot: string])[] = [
-  ['fsl-toolbar', 'toolbar'],
-  ['fsl-actions', 'actions'],
-  ['fsl-footer',  'footer'],
+  ['fsl-toolbar',    'toolbar'],
+  ['fsl-actions',    'actions'],
+  ['fsl-footer',     'footer'],
+  ['fsl-info-panel', 'info-panel'],
 ];
 
 /**
@@ -109,7 +108,7 @@ function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_hol
  *  instance's own machine (`node_modules/jssm/dist/wc/viz.js`
  *  `connectedCallback`'s nested-mode path) and genuinely re-renders via
  *  Graphviz (Task 10a's in-webview asm.js engine) on every transition — plus
- *  toolbar + actions + footer (never an editor).  The FSL source travels in
+ *  toolbar + actions + info-panel + footer (never an editor).  The FSL source travels in
  *  a `<script type="text/fsl">` child — jssm's safe channel for source
  *  containing `<` or `&`.  A fence with no `.fsl-fence-svg` yet is left as
  *  its escaped-source placeholder (the host render is still in flight; the
@@ -134,6 +133,33 @@ function wire_first_paint_bridge(viz: Element, instance: HTMLElement, static_hol
  *  absent `data-height` instead adds the `fsl-autoheight` marker class, the
  *  hook preview.ts's stylesheet uses to cap an unsized diagram at a default
  *  viewport-scale height instead of letting it stretch page-tall.
+ *
+ *  `data-max-width`/`data-max-height` (from `max-width=`/`max-height=` fence
+ *  tokens) are upper bounds honored only when the corresponding exact
+ *  dimension is absent — an exact `width=`/`height=` always wins, the same
+ *  precedence jssm itself documents for the tokens. `max-width` becomes the
+ *  instance's own `max-width` style, but composed as `min(<max-width>, 100%)`
+ *  rather than the bare token: an inline style is stronger than a stylesheet
+ *  rule regardless of specificity, and preview.ts's
+ *  `.fsl-fence fsl-instance { max-width: 100%; }` pane-overflow safety net
+ *  lives on this same property, so writing the raw token would silently
+ *  defeat that cap and let an oversized author value overflow a narrower
+ *  docked pane; `min()` keeps whichever bound is smaller instead.
+ *
+ *  `max-height` targets the mounted
+ *  `<fsl-viz>` child instead of the instance: `fsl-viz`'s shadow DOM sizes
+ *  its internal container to `height: 100%` of itself, which only resolves
+ *  correctly once `fsl-viz` itself has a definite height, so capping the
+ *  outer `<fsl-instance>` alone (whose height stays content-driven with no
+ *  exact `height=`) would not actually constrain the rendered diagram.
+ *  Setting `max-height` directly on `<fsl-viz>` plus its
+ *  `--jssm-viz-max-height` custom property (which jssm's viz component reads
+ *  internally to cap the rendered `<svg>` while preserving aspect ratio —
+ *  letterboxing rather than clipping or overflowing) is the same mechanism
+ *  preview.ts's default 70vh autoheight cap already uses on that element;
+ *  an explicit `max-height=` token replaces that default with the author's
+ *  value rather than stacking with it, so `fsl-autoheight` is suppressed
+ *  whenever `max-height` is present.
  *
  *  @example
  *  hydrate_fence(document.querySelector('.fsl-fence')!);
@@ -162,16 +188,15 @@ export function hydrate_fence(fence: HTMLElement): void {
   instance.setAttribute('theme', 'light');
   instance.style.display = 'none';   // hidden until the live viz's first paint
 
-  const width  = fence.getAttribute('data-width')  ?? '';
-  const height = fence.getAttribute('data-height') ?? '';
-  if (width  !== '') { instance.style.width  = width;  }
-  if (height !== '') {
-    instance.style.height = height;
-  } else {
-    // No explicit height= token: mark for the stylesheet's default
-    // viewport-scale diagram cap (preview.ts STYLES, `.fsl-autoheight`) so an
-    // unsized narrow-tall graph letterboxes instead of stretching page-tall.
-    instance.classList.add('fsl-autoheight');
+  const width      = fence.getAttribute('data-width')      ?? '';
+  const height     = fence.getAttribute('data-height')     ?? '';
+  const max_width  = fence.getAttribute('data-max-width')  ?? '';
+  const max_height = fence.getAttribute('data-max-height') ?? '';
+
+  if (width !== '') {
+    instance.style.width = width;
+  } else if (max_width !== '') {
+    instance.style.maxWidth = `min(${max_width}, 100%)`;
   }
 
   const title = doc.createElement('span');
@@ -181,6 +206,20 @@ export function hydrate_fence(fence: HTMLElement): void {
 
   const viz = doc.createElement('fsl-viz');
   viz.setAttribute('slot', 'viz');
+
+  if (height !== '') {
+    instance.style.height = height;
+  } else if (max_height !== '') {
+    viz.style.maxHeight = max_height;
+    viz.style.setProperty('--jssm-viz-max-height', max_height);
+  } else {
+    // No explicit height= or max-height= token: mark for the stylesheet's
+    // default viewport-scale diagram cap (preview.ts STYLES,
+    // `.fsl-autoheight`) so an unsized narrow-tall graph letterboxes instead
+    // of stretching page-tall.
+    instance.classList.add('fsl-autoheight');
+  }
+
   instance.appendChild(viz);
 
   for (const [tag, slot] of PANELS) {

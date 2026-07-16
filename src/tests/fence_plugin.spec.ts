@@ -78,4 +78,16 @@ describe('fsl_fence_plugin', () => {
     expect(html).toContain('data-height=""');
   });
 
+  it('carries max-width/max-height through as CSS lengths in data attributes', () => {
+    const html = make_md().render('```fsl max-width=500 max-height=25%\na -> b;\n```\n');
+    expect(html).toContain('data-max-width="500px"');
+    expect(html).toContain('data-max-height="25%"');
+  });
+
+  it('emits empty data-max-width/data-max-height when no max dimensions are given', () => {
+    const html = make_md().render('```fsl\na -> b;\n```\n');
+    expect(html).toContain('data-max-width=""');
+    expect(html).toContain('data-max-height=""');
+  });
+
 });

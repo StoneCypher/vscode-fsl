@@ -30,11 +30,13 @@ async function flush_microtasks(): Promise<void> {
 
 /** Build a placeholder div as fence_plugin emits it. Pass `svg` for a cache-hit
  *  fence (mounts) or `null` for a still-pending one (source-only). */
-function make_fence(source: string, svg: string | null = '<svg><g class="node"><title>a</title><ellipse/></g></svg>', width = '', height = ''): HTMLElement {
+function make_fence(source: string, svg: string | null = '<svg><g class="node"><title>a</title><ellipse/></g></svg>', width = '', height = '', max_width = '', max_height = ''): HTMLElement {
   const div = document.createElement('div');
   div.className = 'fsl-fence';
-  div.setAttribute('data-width',  width);
-  div.setAttribute('data-height', height);
+  div.setAttribute('data-width',      width);
+  div.setAttribute('data-height',     height);
+  div.setAttribute('data-max-width',  max_width);
+  div.setAttribute('data-max-height', max_height);
   if (svg !== null) {
     const holder = document.createElement('div');
     holder.className = 'fsl-fence-svg';
@@ -70,20 +72,20 @@ describe('hydrate_fence', () => {
     expect(fence.querySelector('.fsl-static-viz')).toBeNull();
   });
 
-  it('mounts toolbar, actions, and footer into their slots', () => {
+  it('mounts toolbar, actions, footer, and info-panel into their slots', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
     for (const [tag, slot] of [
-      ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'], ['fsl-footer', 'footer'],
+      ['fsl-toolbar', 'toolbar'], ['fsl-actions', 'actions'], ['fsl-footer', 'footer'], ['fsl-info-panel', 'info-panel'],
     ]) {
       expect(fence.querySelector(`${tag}[slot="${slot}"]`), `${tag} missing`).not.toBeNull();
     }
   });
 
-  it('mounts no info-panel (deliberate §5.2 deviation — jssm 5.157.x does not ship fsl-info-panel)', () => {
+  it('mounts an info-panel into the info-panel slot', () => {
     const fence = make_fence('a -> b;');
     hydrate_fence(fence);
-    expect(fence.querySelector('fsl-info-panel')).toBeNull();
+    expect(fence.querySelector('fsl-info-panel[slot="info-panel"]')).not.toBeNull();
   });
 
   it('never mounts an editor (spec §5.2 — VS Code is the editor)', () => {
@@ -117,6 +119,47 @@ describe('hydrate_fence', () => {
 
   it('does not mark the instance autoheight when an explicit height= is set', () => {
     const fence = make_fence('a -> b;', undefined, '', '50%');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.classList.contains('fsl-autoheight')).toBe(false);
+  });
+
+  it('composes max-width with the pane overflow cap via min(), rather than replacing it', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.maxWidth).toBe('min(400px, 100%)');
+    expect(instance.style.width).toBe('');
+  });
+
+  it('does not apply max-width when an explicit width is set (exact wins)', () => {
+    const fence = make_fence('a -> b;', undefined, '300px', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.width).toBe('300px');
+    expect(instance.style.maxWidth).toBe('');
+  });
+
+  it('applies max-height and the --jssm-viz-max-height custom property to the viz element when height is absent', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '', '400px');
+    hydrate_fence(fence);
+    const viz = fence.querySelector('fsl-viz[slot="viz"]') as HTMLElement;
+    expect(viz.style.maxHeight).toBe('400px');
+    expect(viz.style.getPropertyValue('--jssm-viz-max-height')).toBe('400px');
+  });
+
+  it('does not apply max-height when an explicit height is set (exact wins)', () => {
+    const fence = make_fence('a -> b;', undefined, '', '50%', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    const viz = fence.querySelector('fsl-viz[slot="viz"]') as HTMLElement;
+    expect(instance.style.height).toBe('50%');
+    expect(viz.style.maxHeight).toBe('');
+    expect(viz.style.getPropertyValue('--jssm-viz-max-height')).toBe('');
+  });
+
+  it('suppresses fsl-autoheight when max-height is set', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '', '400px');
     hydrate_fence(fence);
     const instance = fence.querySelector('fsl-instance') as HTMLElement;
     expect(instance.classList.contains('fsl-autoheight')).toBe(false);
