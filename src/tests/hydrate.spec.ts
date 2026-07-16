@@ -30,11 +30,13 @@ async function flush_microtasks(): Promise<void> {
 
 /** Build a placeholder div as fence_plugin emits it. Pass `svg` for a cache-hit
  *  fence (mounts) or `null` for a still-pending one (source-only). */
-function make_fence(source: string, svg: string | null = '<svg><g class="node"><title>a</title><ellipse/></g></svg>', width = '', height = ''): HTMLElement {
+function make_fence(source: string, svg: string | null = '<svg><g class="node"><title>a</title><ellipse/></g></svg>', width = '', height = '', max_width = '', max_height = ''): HTMLElement {
   const div = document.createElement('div');
   div.className = 'fsl-fence';
-  div.setAttribute('data-width',  width);
-  div.setAttribute('data-height', height);
+  div.setAttribute('data-width',      width);
+  div.setAttribute('data-height',     height);
+  div.setAttribute('data-max-width',  max_width);
+  div.setAttribute('data-max-height', max_height);
   if (svg !== null) {
     const holder = document.createElement('div');
     holder.className = 'fsl-fence-svg';
@@ -117,6 +119,47 @@ describe('hydrate_fence', () => {
 
   it('does not mark the instance autoheight when an explicit height= is set', () => {
     const fence = make_fence('a -> b;', undefined, '', '50%');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.classList.contains('fsl-autoheight')).toBe(false);
+  });
+
+  it('applies max-width to the instance style when width is absent', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.maxWidth).toBe('400px');
+    expect(instance.style.width).toBe('');
+  });
+
+  it('does not apply max-width when an explicit width is set (exact wins)', () => {
+    const fence = make_fence('a -> b;', undefined, '300px', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    expect(instance.style.width).toBe('300px');
+    expect(instance.style.maxWidth).toBe('');
+  });
+
+  it('applies max-height and the --jssm-viz-max-height custom property to the viz element when height is absent', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '', '400px');
+    hydrate_fence(fence);
+    const viz = fence.querySelector('fsl-viz[slot="viz"]') as HTMLElement;
+    expect(viz.style.maxHeight).toBe('400px');
+    expect(viz.style.getPropertyValue('--jssm-viz-max-height')).toBe('400px');
+  });
+
+  it('does not apply max-height when an explicit height is set (exact wins)', () => {
+    const fence = make_fence('a -> b;', undefined, '', '50%', '', '400px');
+    hydrate_fence(fence);
+    const instance = fence.querySelector('fsl-instance') as HTMLElement;
+    const viz = fence.querySelector('fsl-viz[slot="viz"]') as HTMLElement;
+    expect(instance.style.height).toBe('50%');
+    expect(viz.style.maxHeight).toBe('');
+    expect(viz.style.getPropertyValue('--jssm-viz-max-height')).toBe('');
+  });
+
+  it('suppresses fsl-autoheight when max-height is set', () => {
+    const fence = make_fence('a -> b;', undefined, '', '', '', '400px');
     hydrate_fence(fence);
     const instance = fence.querySelector('fsl-instance') as HTMLElement;
     expect(instance.classList.contains('fsl-autoheight')).toBe(false);
