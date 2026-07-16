@@ -346,6 +346,12 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # The default GITHUB_TOKEN may be read-only depending on repo settings;
+    # creating the tag + release requires contents write (same lesson as the
+    # gh-pages job above - the first release run 403'd without this).
+    permissions:
+      contents: write
+
     steps:
     - uses: actions/checkout@v4
 
@@ -361,8 +367,9 @@ jobs:
         node-version: 24.x
         registry-url: https://registry.npmjs.org/
 
-    - name: Push tags
-      run: git push origin --tags
+    # (A "Push tags" step lived here until 2026-07-16: dead since the port -
+    # no locally-created tag exists to push; create-release@v1 below creates
+    # the tag itself - and fatal once workflow tokens went read-only.)
 
     - name: Create the release
       uses: actions/create-release@v1
