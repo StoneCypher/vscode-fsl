@@ -48,6 +48,10 @@ export function dimension_to_css(dim: FenceDimension | null): string {
  *  inlined in a `.fsl-fence-svg` child BEFORE the source pre; on a MISS the
  *  placeholder ships source-only and the injected `get_svg` enqueues the
  *  render.  All other fences fall through to the previous fence renderer.
+ *  When a `max-height=` token is present, the `.fsl-fence` div also carries
+ *  an inline `style="--fsl-max-height:<css-length>"` so preview.ts's
+ *  stylesheet can size the first-paint static SVG to the author's value
+ *  instead of its hardcoded default (see preview.ts's STYLES).
  *
  *  Stays pure and synchronous: no `'vscode'` import, no `await`.  Per spec
  *  §5.2 element/format tokens are ignored; only width/height survive.
@@ -85,10 +89,21 @@ export function fsl_fence_plugin(md: MarkdownIt, options: FslFencePluginOptions)
     const svg       = get_svg(token.content, desc);   // trusted jssm/viz markup, or null
     const svg_block = svg === null ? '' : `<div class="fsl-fence-svg">${svg}</div>`;
 
+    // An author max-height= token needs to reach the first-paint static SVG
+    // too, not just the live hydrated diagram — otherwise the static SVG
+    // falls back to preview.ts's hardcoded 70vh default and visibly resizes
+    // the instant hydrate.js swaps in the live element with the real token
+    // applied. Stamping the value as a `--fsl-max-height` custom property
+    // inline lets preview.ts's stylesheet read it via `var(--fsl-max-height,
+    // 70vh)` — present here, absent there falls back to the same default as
+    // before. See preview.ts's STYLES for the consuming rule.
+    const max_height_css = dimension_to_css(desc.max_height);
+    const style_attr      = max_height_css === '' ? '' : ` style="--fsl-max-height:${esc(max_height_css)}"`;
+
     return `<div class="fsl-fence" data-width="${esc(dimension_to_css(desc.width))}"`
          + ` data-height="${esc(dimension_to_css(desc.height))}"`
          + ` data-max-width="${esc(dimension_to_css(desc.max_width))}"`
-         + ` data-max-height="${esc(dimension_to_css(desc.max_height))}">`
+         + ` data-max-height="${esc(max_height_css)}"${style_attr}>`
          + svg_block
          + `<pre class="fsl-fence-source"><code>${esc(token.content)}</code></pre>`
          + `</div>\n`;

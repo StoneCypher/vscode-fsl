@@ -49,8 +49,14 @@ const STYLES = `
   /* Matching cap on the first-paint static SVG so pre-swap and post-swap
      presentation agree. [data-height=""] is the "no explicit height" marker
      fence_plugin.ts already stamps on every unsized fence at render time —
-     true from first paint, before hydrate.js ever runs. */
-  .fsl-fence[data-height=""] .fsl-fence-svg svg { max-height: 70vh; }
+     true from first paint, before hydrate.js ever runs. var(--fsl-max-height, 70vh)
+     reads the inline custom property fence_plugin.ts stamps on .fsl-fence
+     when the author gave an explicit max-height= token, so the static SVG
+     already honors that value instead of always falling back to the 70vh
+     default and visibly resizing the instant hydrate.js's live swap applies
+     the real token (only px-valued tokens are exercised end to end today —
+     see notes/manual-test-checklist.md for the percentage-token caveat). */
+  .fsl-fence[data-height=""] .fsl-fence-svg svg { max-height: var(--fsl-max-height, 70vh); }
 `;
 
 function inject_styles(): void {

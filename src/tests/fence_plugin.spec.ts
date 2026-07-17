@@ -90,4 +90,16 @@ describe('fsl_fence_plugin', () => {
     expect(html).toContain('data-max-height=""');
   });
 
+  it('stamps a --fsl-max-height inline custom property when max-height is given, so the ' +
+     'first-paint static SVG honors the author token instead of the stylesheet default', () => {
+    const html = make_md().render('```fsl max-height=200\na -> b;\n```\n');
+    expect(html).toContain('style="--fsl-max-height:200px"');
+  });
+
+  it('omits the --fsl-max-height inline style when no max-height token is given', () => {
+    const html = make_md().render('```fsl\na -> b;\n```\n');
+    expect(html).not.toContain('--fsl-max-height');
+    expect(html).not.toContain(' style="');
+  });
+
 });
