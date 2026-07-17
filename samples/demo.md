@@ -18,6 +18,12 @@ Capped growth (natural size, but never taller than 200px — letterboxes instead
 A -> B -> C -> D -> E -> A;
 ```
 
+Capped growth, percentage token (caveat: percentage max-height resolution against an auto-height ancestor is unverified at runtime — see notes/manual-test-checklist.md):
+
+```fsl max-height=50%
+A -> B -> C -> D -> E -> A;
+```
+
 Not ours (must stay a normal code block):
 
 ```js
