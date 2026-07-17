@@ -7,10 +7,14 @@
  *    - `build/esbuild/*.meta.json` — esbuild metafiles the `viz_png` stage
  *      feeds to esbuild-visualizer to draw the bundle-composition graphs.
  *    - `dist/package.json` (`{ "type": "commonjs" }`) — scopes the CJS
- *      `dist/extension.js` so Node (and `attw`) read it as CommonJS even though
- *      the repo root `package.json` is `"type": "module"` for the build_js ESM
- *      scripts. VS Code's extension host reads the root manifest for the
- *      contribution surface, so this per-directory marker is invisible to it.
+ *      `dist/extension.js` so Node (and `attw`) read it as CommonJS. The root
+ *      `package.json` carries no top-level `"type"` field at all (Node's own
+ *      default is already CommonJS); the ESM marker for this project's
+ *      `build_js` scripts lives in the separate `src/build_js/package.json`
+ *      instead. This per-directory write is therefore belt-and-braces today
+ *      rather than load-bearing — kept because it still documents intent for
+ *      `attw`/Node consumers and keeps `dist/` correct if the root
+ *      manifest's `"type"` ever changes.
  *
  *  Run: `node src/scripts/build.mjs`
  *
@@ -82,6 +86,8 @@ const previewResult = await build({
 await writeFile(abs('build/esbuild/extension.meta.json'), JSON.stringify(extensionResult.metafile), 'utf8');
 await writeFile(abs('build/esbuild/preview.meta.json'),   JSON.stringify(previewResult.metafile),   'utf8');
 
-// Mark dist/ as CommonJS so the CJS extension bundle resolves correctly under
-// the repo's root "type": "module".
+// Belt-and-braces: mark dist/ as CommonJS explicitly for Node/attw. The root
+// package.json has no top-level "type" field (Node already defaults to
+// CommonJS) — see the module docblock above for where the real ESM marker
+// (src/build_js/package.json) lives instead.
 await writeFile(abs('dist/package.json'), JSON.stringify({ type: 'commonjs' }, null, 2) + '\n', 'utf8');

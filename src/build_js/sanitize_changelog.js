@@ -31,9 +31,15 @@ const CHANGELOG_FILES = ['CHANGELOG.md', 'CHANGELOG.long.md'];
  * `/`, or `!` immediately following it — while leaving everything else (math
  * comparisons like `a < b`, arrows, plain text) untouched.
  *
- * Markdown renders `&lt;` back to a literal `<`, so escaping here does not
- * change how the changelog displays; it only stops tag-sniffing tools like
- * `vsce` from seeing an opening tag.
+ * In ordinary prose text, Markdown decodes `&lt;` back to a literal `<`, so
+ * escaping there does not change how the changelog displays; it only stops
+ * tag-sniffing tools like `vsce` from seeing an opening tag. That is NOT
+ * true inside a backticked code span or fenced code block: Markdown does not
+ * decode entities there, so a commit message quoting `` `<svg>` `` displays
+ * as the literal text `&lt;svg>` after sanitization (see
+ * `sanitize_changelog.spec.ts`'s "escapes a tag inside a backticked code
+ * span" case). That display cost is the accepted trade-off — `vsce` tag-
+ * sniffs inside code spans too, so they must be sanitized the same as prose.
  *
  * @param text - Markdown content to sanitize
  * @returns The same text with tag-opening `<` characters escaped to `&lt;`

@@ -75,6 +75,13 @@ function render_error_box(fence: HTMLElement, message: string): void {
  *  runtime without the component registered): the fence then keeps the
  *  static SVG forever, the same safe fallback.
  *
+ *  If the fence (and with it `viz`'s shadow root) is removed from the
+ *  document before the first paint lands, this observer is never explicitly
+ *  disconnected — but once nothing references the removed nodes, the
+ *  observer and its callback closure become garbage-collectable like any
+ *  other DOM listener on a detached tree, and no callback can fire after
+ *  removal in practice.
+ *
  *  @example
  *  wire_first_paint_bridge(vizEl, instanceEl, staticSvgHolder);
  *  // staticSvgHolder stays visible / instanceEl stays display:none until
