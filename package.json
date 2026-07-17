@@ -58,6 +58,14 @@
         "language": "fsl",
         "scopeName": "source.fsl",
         "path": "./syntaxes/fsl.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.fsl.codeblock",
+        "path": "./syntaxes/fsl.markdown.injection.json",
+        "injectTo": ["text.html.markdown"],
+        "embeddedLanguages": {
+          "meta.embedded.block.fsl": "source.fsl"
+        }
       }
     ]
   },
