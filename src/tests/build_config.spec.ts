@@ -68,7 +68,7 @@ describe('buildPlan — defaults', () => {
       const { stages, disabled, warnings } = buildPlan({ cwd, argv: [], env: {} });
       expect(stages[0]).toEqual(['clean']);
       expect(stages[1]?.sort()).toEqual(
-        ['changelog', 'cloc', 'docs', 'eslint', 'just_test_save', 'typescript', 'typescript_tests'].sort()
+        ['changelog', 'cloc', 'copy_grammars', 'docs', 'eslint', 'just_test_save', 'typescript', 'typescript_tests'].sort()
       );
       expect(stages[2]?.sort()).toEqual(['bundle', 'dts', 'update_madlibs'].sort());
       expect(stages[3]?.sort()).toEqual(['terser', 'viz_png'].sort());
@@ -116,7 +116,7 @@ describe('buildPlan — profiles', () => {
       expect(disabled.sort()).toEqual(
         ['docs', 'eslint', 'cloc', 'changelog', 'viz_png', 'attw', 'site'].sort()
       );
-      expect(stages[1]?.sort()).toEqual(['just_test_save', 'typescript', 'typescript_tests'].sort());
+      expect(stages[1]?.sort()).toEqual(['copy_grammars', 'just_test_save', 'typescript', 'typescript_tests'].sort());
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

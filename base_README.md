@@ -101,6 +101,8 @@ Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence,
 
 ` ```fsl ` (synonym ` ```jssm `, case-insensitive) fences follow a portable grammar meant to work the same way across every Markdown host that chooses to support it — GitHub, static-site generators, future editors, and this extension. The full grammar, including the element/format tokens this extension ignores, lives in the [jssm fence-convention spec](https://www.github.com/stonecypher/vscode-fsl/blob/main/notes/superpowers/specs/2026-06-23-fsl-markdown-fence-convention-design.md).
 
+As of 0.3.0, fences also colorize in the raw Markdown source view, not just the live preview: the extension registers jssm's published TextMate grammar for `.fsl` files and injects it into ` ```fsl `/` ```jssm ` fenced code blocks via a VS Code markdown-injection grammar.
+
 | Token | Meaning | Honored here? |
 |---|---|---|
 | ` ```fsl ` / ` ```jssm ` | Fence language — activates this extension | Yes, required |
@@ -117,8 +119,9 @@ This extension is deliberately the grammar's *maximalist* interpreter: VS Code a
 
 ## `.fsl` files
 
-The extension declares the `fsl` language for `.fsl` files (comment toggling and
-bracket matching work; syntax colors are a future addition). Once the extension is
+The extension declares the `fsl` language for `.fsl` files (comment toggling,
+bracket matching, and syntax coloring all work — syntax colors come from jssm's
+own published TextMate grammar, registered here as of 0.3.0). Once the extension is
 on the Marketplace, VS Code will automatically suggest it to anyone who opens a
 `.fsl` file. The live rendering itself lives in the Markdown preview — `.fsl`
 files are declared for association and editing convenience.

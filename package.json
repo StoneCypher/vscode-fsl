@@ -1,7 +1,7 @@
 {
   "name": "vscode-fsl",
   "displayName": "FSL Markdown Preview",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Live FSL / jssm state machines in VS Code's Markdown preview",
   "publisher": "StoneCypher",
   "keywords": [
@@ -52,6 +52,21 @@
     "markdown.markdownItPlugins": true,
     "markdown.previewScripts": [
       "./dist/preview.js"
+    ],
+    "grammars": [
+      {
+        "language": "fsl",
+        "scopeName": "source.fsl",
+        "path": "./syntaxes/fsl.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.fsl.codeblock",
+        "path": "./syntaxes/fsl.markdown.injection.json",
+        "injectTo": ["text.html.markdown"],
+        "embeddedLanguages": {
+          "meta.embedded.block.fsl": "source.fsl"
+        }
+      }
     ]
   },
   "directories": {
@@ -66,6 +81,7 @@
     "bundle": "node src/scripts/build.mjs",
     "terser": "node src/build_js/minify_bundles.js && cp dist/preview.js dist/preview.js.map docs",
     "verify_dist_entrypoints": "node src/build_js/verify_dist_entrypoints.js",
+    "copy_grammars": "node src/build_js/copy_grammars.js",
     "dts": "cp build/ts/*.d.ts build/ts/*.d.ts.map dist/",
     "viz_png": "node src/build_js/render_visualizations.js && cp build/esbuild/visualizations/bundle_*.png . && cp build/esbuild/visualizations/bundle_*.png docs/ && cp build/esbuild/visualizations/bundle_*.png docs/docs/",
     "site": "cp src/html/* docs && cp src/html/.nojekyll docs && cp README.md docs/ && cp src/html/*.png docs/docs",
@@ -84,7 +100,7 @@
   },
   "dependencies": {
     "@viz-js/viz": "^3",
-    "jssm": "^5.162.32",
+    "jssm": "^5.163.0",
     "lit": "^3",
     "viz.js": "^2.1.2"
   },
