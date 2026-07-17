@@ -1,12 +1,12 @@
-# FSL Markdown Preview v0.2.0
+# FSL Markdown Preview v0.3.0
 
-> Version 0.2.0 was built on Wednesday, July 15, 2026 at GMT-07:00 `1784184799352` from hash `39815d0`.
+> Version 0.3.0 was built on Thursday, July 16, 2026 at GMT-07:00 `1784265829784` from hash `92b530d`.
 
 A VS Code extension that renders ` ```fsl ` and ` ```jssm ` fenced code blocks in
 the Markdown **preview** as live, interactive [FSL](https://github.com/StoneCypher/jssm)
 state machines — the full `<fsl-instance>` IDE, minus the editor.
 
-<!-- Supported embeds: 1784184799352 Wednesday, July 15, 2026 at GMT-07:00 88.04 3 66 39815d0 0 3 116 113 0.2.0 -->
+<!-- Supported embeds: 1784265829784 Thursday, July 16, 2026 at GMT-07:00 86.95 3 66 92b530d 0 3 134 131 0.3.0 -->
 
 &nbsp;
 
@@ -42,8 +42,8 @@ The fence becomes a live, interactive traffic-light state machine — click an a
   </tr>
   <tr>
     <th>Unit</th>
-    <td>113</td>
-    <td>88.04<small>%</small></td>
+    <td>131</td>
+    <td>86.95<small>%</small></td>
   </tr>
   <tr>
     <th>Stochastic</th>
@@ -59,7 +59,7 @@ The fence becomes a live, interactive traffic-light state machine — click an a
     <th>Documentation coverage</th>
   </tr>
   <tr>
-    <td>116</td>
+    <td>134</td>
     <td>3</td>
     <td>66<small>%</small></td>
   </tr>
@@ -101,6 +101,8 @@ Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence,
 
 ` ```fsl ` (synonym ` ```jssm `, case-insensitive) fences follow a portable grammar meant to work the same way across every Markdown host that chooses to support it — GitHub, static-site generators, future editors, and this extension. The full grammar, including the element/format tokens this extension ignores, lives in the [jssm fence-convention spec](https://www.github.com/stonecypher/vscode-fsl/blob/main/notes/superpowers/specs/2026-06-23-fsl-markdown-fence-convention-design.md).
 
+As of 0.3.0, fences also colorize in the raw Markdown source view, not just the live preview: the extension registers jssm's published TextMate grammar for `.fsl` files and injects it into ` ```fsl `/` ```jssm ` fenced code blocks via a VS Code markdown-injection grammar.
+
 | Token | Meaning | Honored here? |
 |---|---|---|
 | ` ```fsl ` / ` ```jssm ` | Fence language — activates this extension | Yes, required |
@@ -117,8 +119,9 @@ This extension is deliberately the grammar's *maximalist* interpreter: VS Code a
 
 ## `.fsl` files
 
-The extension declares the `fsl` language for `.fsl` files (comment toggling and
-bracket matching work; syntax colors are a future addition). Once the extension is
+The extension declares the `fsl` language for `.fsl` files (comment toggling,
+bracket matching, and syntax coloring all work — syntax colors come from jssm's
+own published TextMate grammar, registered here as of 0.3.0). Once the extension is
 on the Marketplace, VS Code will automatically suggest it to anyone who opens a
 `.fsl` file. The live rendering itself lives in the Markdown preview — `.fsl`
 files are declared for association and editing convenience.
