@@ -24,6 +24,10 @@ export const FEATURES = {
   typescript:       { stages: [1], mandatory: true, script: 'typescript' },
   typescript_tests: { stages: [1], mandatory: true, script: 'typescript_tests' },
   just_test_save:   { stages: [1], mandatory: true, script: 'just_test_save' },
+  // Copies jssm's published TextMate grammar into ./syntaxes/. Only needs
+  // node_modules/jssm present, so it can run alongside the other stage-1
+  // features rather than waiting on the bundle/dts stages.
+  copy_grammars:    { stages: [1], mandatory: true, script: 'copy_grammars' },
   bundle:           { stages: [2], mandatory: true, script: 'bundle' },
   dts:              { stages: [2], mandatory: true, script: 'dts' },
   update_madlibs:   { stages: [2], mandatory: true, script: 'update_madlibs' },
