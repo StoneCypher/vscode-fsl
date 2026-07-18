@@ -94,7 +94,7 @@ This extension isn't on the Marketplace yet — publishing is a separate, later,
 npm install
 npm run build
 npx vsce package
-code --install-extension vscode-fsl-0.1.0.vsix
+code --install-extension vscode-fsl-{{version}}.vsix
 ```
 
 Reload VS Code, open (or create) a Markdown file containing an ` ```fsl ` fence, and open its preview.
