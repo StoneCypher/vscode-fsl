@@ -383,6 +383,16 @@ jobs:
         release_name: ${{ env.TAG }}
         body_path: CHANGELOG.md
 
+    # Disabled until a VSCE_PAT secret (an Azure DevOps PAT, Marketplace ->
+    # Manage scope - see notes/marketplace-publish.md) is added to this repo's
+    # Actions secrets AND the user has deliberately decided to turn on
+    # auto-publish. Until then, publishing stays a manual `vsce publish` step.
+    # - name: Publish to VS Code Marketplace
+    #   run: |
+    #     npx vsce publish
+    #   env:
+    #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
     # - name: Publish to npm
     #   run: |
     #     npm publish
