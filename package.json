@@ -26,6 +26,11 @@
   },
   "license": "MIT",
   "author": "John Haugeland <stonecypher@gmail.com>",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#104e8b",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
