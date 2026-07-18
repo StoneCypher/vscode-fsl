@@ -44,9 +44,28 @@ export interface VizAsmRenderOptions {
  *  render — even of valid input — fails too. Rebuilding a fresh `Viz`
  *  (cheap: the asm.js module itself is already JIT-compiled by the engine)
  *  keeps one bad render from poisoning the rest of the session.
+ *
+ *  Edge case, accepted as benign: if the *rebuild* constructor itself were to
+ *  throw (it hasn't been observed to), that error would propagate from
+ *  {@link renderString} instead of the original render error, and `#viz`
+ *  would stay on the old, already-poisoned instance. Construction already
+ *  succeeded once when this instance was created, so a rebuild failing is a
+ *  different, much less likely failure mode than a render failing — not
+ *  worth guarding given today's evidence.
+ *
+ *  @example
+ *  const viz = new VizAsmInstance();
+ *  const svg = await viz.renderString('digraph { a -> b; }', { format: 'svg' });
+ *  svg.includes('<svg');  // true
  */
 export class VizAsmInstance {
 
+  // viz.js@2's asm.js build logs a benign V8 stderr warning on construction —
+  // "Linking failure in asm.js: Unexpected stdlib member" — because the
+  // Emscripten-generated module references a stdlib member V8's asm.js
+  // validator doesn't recognize. V8 falls back to plain (non-asm.js-
+  // optimized) JS transparently; rendering still works correctly. Noted here
+  // so a future debugger doesn't chase it as a real failure.
   #viz: Viz = new Viz({ Module, render });
 
   /**

@@ -25,3 +25,15 @@
 - [x] (c) Error box on the broken fence is unchanged from the prior walk (still appears, still shows the escaped source beneath it)
 - [x] (d) Editing the document still re-hydrates correctly: the `vscode.markdown.updateContent` handshake fires and fences re-hydrate without a manual refresh
 - [x] (e) Switching the VS Code theme restyles the LIVE diagram too (the fsl-viz inside fsl-instance takes the new theme); the host-rendered first-paint static SVG stays theme-fixed light — expected, not a bug
+
+## Known caveat — not yet walked
+
+- [ ] (g) `max-height=` PERCENTAGE tokens (e.g. `max-height=50%`, added to
+  `samples/demo.md` in the accepted-minors sweep) are unverified live — only
+  px-valued `max-height=` tokens have been manually walked to date. A
+  percentage `max-height` resolves against its ancestor's own height, which
+  is the same CSS-percentage-resolution class `fsl#1934` fixed for unsized
+  plain diagrams; whether it resolves correctly here needs a real F5 walk,
+  not just the existing unit tests (which only assert the token is carried
+  through as a CSS string, not that the browser resolves it visually as
+  expected).

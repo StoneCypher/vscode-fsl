@@ -210,8 +210,11 @@ jobs:
   # Push to main: cross-platform verification matrix.
   # Uses the ci-lite profile to skip artifact production (docs, site,
   # visualizations, changelog, cloc) because those are platform-invariant
-  # and already produced by test-main-full. Tests, typecheck, lint, bundle,
-  # and attw DO benefit from multi-platform verification.
+  # and already produced by test-main-full. ci-lite also disables eslint
+  # (see build.config.json's ci-lite profile) — lint is Node/OS-invariant
+  # too, so it isn't re-run here; test-main-full's single Ubuntu run is the
+  # only place eslint gates a push. Tests, typecheck, bundle, and attw DO
+  # benefit from multi-platform verification.
   test-main-matrix:
     needs: [detect-fullbuild]
     if: github.event_name == 'push' || needs.detect-fullbuild.outputs.fullbuild == 'true'

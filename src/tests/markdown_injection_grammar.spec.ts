@@ -10,6 +10,14 @@ import { join } from 'path';
  * source to trust; the regex behavior must be verified directly against
  * Node's RegExp engine here, since VS Code will parse the same pattern
  * string with Oniguruma at runtime.
+ *
+ * Dual-engine caveat: the begin/end patterns' `(^|\G)` alternative is an
+ * Oniguruma `\G` anchor (VS Code's markdown-basics grammar uses the same
+ * idiom) that Node's RegExp engine does not support — `\G` degrades to a
+ * literal identity-escaped "G" character here, so that branch is inert
+ * (never exercised) under every case below. What these tests actually prove
+ * is string-identity with the known-good Oniguruma idiom, not full branch
+ * coverage of the pattern under this engine.
  */
 
 const PROJECT_ROOT = process.cwd();
