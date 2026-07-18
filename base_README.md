@@ -12,7 +12,11 @@ state machines — the full `<fsl-instance>` IDE, minus the editor.
 
 ## Screenshot
 
-> _Placeholder — a screenshot of a live ` ```fsl ` fence rendered as an interactive state-machine IDE in VS Code's Markdown preview belongs here. Add one before publishing to the Marketplace._
+> _Screenshot pending — capture one before publishing to the Marketplace (see `notes/marketplace-publish.md`)._
+
+<!-- Once images/screenshot.png exists, delete the placeholder line above and uncomment the line below:
+![A live `fsl` fence rendered as an interactive state-machine IDE in VS Code's Markdown preview](images/screenshot.png)
+-->
 
 &nbsp;
 
